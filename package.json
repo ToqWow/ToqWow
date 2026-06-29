@@ -1,10 +1,14 @@
 {
   "name": "toqwow",
   "private": true,
-  "workspaces": ["apps/*", "packages/*", "backend"],
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "backend"
+  ],
   "scripts": {
     "dev": "turbo run dev",
-    "build": "turbo run build",
+    "build": "yarn --cwd backend build",
     "lint": "turbo run lint"
   },
   "devDependencies": {
