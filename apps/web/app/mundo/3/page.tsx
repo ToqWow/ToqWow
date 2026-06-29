@@ -3,566 +3,783 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
-/* ══════════════════════════════════════
-   🎵 AUDIO
-══════════════════════════════════════ */
+/* ══════════════════════════════════════════════
+   🎵 AUDIO ENGINE
+══════════════════════════════════════════════ */
 let AC: AudioContext | null = null;
 const ac = (): AudioContext => { if (!AC) AC = new ((window as any).AudioContext || (window as any).webkitAudioContext)(); return AC!; };
 const note = (f: number, d = 0.3, v = 0.2, t: OscillatorType = 'sine') => {
   try { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.connect(g); g.connect(c.destination); o.type = t; o.frequency.value = f; g.gain.setValueAtTime(v, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + d); o.start(); o.stop(c.currentTime + d); } catch {}
 };
-const melody = (fs: number[], gap = 90, d = 0.35, v = 0.18) => fs.forEach((f, i) => setTimeout(() => note(f, d, v), i * gap));
+const melody = (fs: number[], gap = 80, d = 0.25, v = 0.15) => fs.forEach((f, i) => setTimeout(() => note(f, d, v), i * gap));
 const vib = (p: number | number[]) => { try { (navigator as any).vibrate?.(p); } catch {} };
 
-/* ══════════════════════════════════════
-   📐 TIPOS
-══════════════════════════════════════ */
-type Need = 'hunger' | 'sleep' | 'fun' | 'bath' | 'love';
-type Mood = 'happy' | 'hungry' | 'sleepy' | 'excited' | 'sad' | 'playful' | 'clean' | 'loved';
-type Outfit = { hair: string; top: string; acc: string };
-
-type Character = {
-  id: number; name: string; baseEmoji: string;
-  x: number; y: number; sz: number;
-  needs: Record<Need, number>; // 0-100
-  mood: Mood; action: string; // current animation label
-  dragging: boolean; zIndex: number;
-  outfit: Outfit;
-  eating: boolean; sleeping: boolean; bathing: boolean; dancing: boolean;
-  speechBubble: string; bubbleTimer: number;
-  layer: 'front' | 'back';
+/* ══════════════════════════════════════════════
+   🏠 AMBIENTES - 28 cuartos estilo Supersónicos
+══════════════════════════════════════════════ */
+type Ambiente = {
+  id: number; nombre: string; emoji: string;
+  bg: string; accent: string; floor: string;
+  objetos: Objeto[];
 };
 
-type FurnitureItem = {
-  id: number; emoji: string; label: string;
-  x: number; y: number; sz: number;
-  room: string; placed: boolean; dragging: boolean; zIndex: number;
-  action: Need | 'fun' | 'deco'; // what need it satisfies
+type Objeto = {
+  id: string; emoji: string; label: string;
+  x: number; y: number; w: number; h: number;
+  zIndex?: number; layer?: 'back' | 'front';
+  accion?: string; efecto?: string;
+  sonido?: number[];
+};
+
+type Personaje = {
+  id: string; nombre: string; emoji: string;
   color: string;
-  layer: 'front' | 'back';
+  hambre: number; sueno: number; diversion: number;
+  bano: number; amor: number;
+  humor: 'feliz' | 'normal' | 'triste' | 'emocionado';
+  x: number; y: number;
+  cabello: number; top: number; accesorio: number;
 };
 
-type Particle = { id: number; x: number; y: number; emoji: string; vy: number };
-type SpeechBubble = { charId: number; text: string; x: number; y: number };
-
-/* ══════════════════════════════════════
-   🎭 CONSTANTES
-══════════════════════════════════════ */
-const HAIR_OPTIONS  = ['👱','🧑','👩','🧒','👧','🧔','👴','👵'];
-const TOP_OPTIONS   = ['👕','🧥','👗','🥼','🎽','👘','🥻','🩱'];
-const ACC_OPTIONS   = ['🎩','👑','🌂','🎀','🕶️','💍','⌚','🎓'];
-
-const MOODS_EMOJI: Record<Mood, string> = {
-  happy: '😊', hungry: '😋', sleepy: '😴', excited: '🤩',
-  sad: '😢', playful: '😄', clean: '🤗', loved: '🥰',
-};
-const MOOD_COLORS: Record<Mood, string> = {
-  happy:'#7CFC00', hungry:'#FF8E53', sleepy:'#B8A9FF', excited:'#FFD700',
-  sad:'#87CEEB', playful:'#FF6B9D', clean:'#00D4C8', loved:'#FF69B4',
-};
-
-const NEED_ICONS: Record<Need, string> = {
-  hunger:'🍕', sleep:'💤', fun:'🎮', bath:'🛁', love:'❤️',
-};
-
-const ACTION_RESPONSES: Record<string, { speech: string[]; sound: () => void; particle: string }> = {
-  eat:   { speech:['¡Qué rico!','¡Mmm delicioso!','¡Más por favor!','¡Yummy!'], sound:()=>melody([523,659,784,1047]),  particle:'🍕' },
-  sleep: { speech:['Zzz...','Buenas noches...','Qué sueño tengo...','Zzzz...'], sound:()=>note(200,1.5,0.15,'sine'),     particle:'💤' },
-  bath:  { speech:['¡Qué fresco!','¡Me encanta bañarme!','¡Splash!','¡Limpio!'], sound:()=>{ note(600,0.2,0.2); setTimeout(()=>note(800,0.2,0.15),150); setTimeout(()=>note(1000,0.2,0.1),300); }, particle:'🫧' },
-  play:  { speech:['¡Woohoo!','¡Soy el mejor!','¡Más!','¡Otra vez!'], sound:()=>melody([659,784,880,1047,1175]),         particle:'⭐' },
-  hug:   { speech:['¡Te quiero!','¡Abrazo!','¡Eres mi amigo!','💕'], sound:()=>melody([523,659,784]),                     particle:'❤️' },
-};
-
-const INIT_CHARACTERS: Omit<Character, 'dragging'|'zIndex'|'eating'|'sleeping'|'bathing'|'dancing'|'speechBubble'|'bubbleTimer'>[] = [
-  { id:1, name:'Luna',   baseEmoji:'👧', x:18, y:42, sz:72, needs:{hunger:80,sleep:90,fun:70,bath:85,love:75}, mood:'happy',   action:'idle', outfit:{hair:'👧',top:'👗',acc:'🎀'}, layer:'front' },
-  { id:2, name:'Orión',  baseEmoji:'👦', x:52, y:42, sz:72, needs:{hunger:60,sleep:75,fun:90,bath:70,love:80}, mood:'playful', action:'idle', outfit:{hair:'👦',top:'👕',acc:'🎩'}, layer:'front' },
-  { id:3, name:'Cosmo',  baseEmoji:'🐱', x:34, y:44, sz:60, needs:{hunger:90,sleep:65,fun:80,bath:60,love:95}, mood:'happy',   action:'idle', outfit:{hair:'🐱',top:'👕',acc:''}, layer:'front' },
-  { id:4, name:'Nebula', baseEmoji:'🐶', x:70, y:44, sz:60, needs:{hunger:75,sleep:80,fun:95,bath:75,love:85}, mood:'excited', action:'idle', outfit:{hair:'🐶',top:'🎽',acc:''}, layer:'front' },
+/* Personajes base */
+const PERSONAJES_BASE: Personaje[] = [
+  { id: 'luna', nombre: 'Luna', emoji: '👧', color: '#B8A9FF', hambre: 80, sueno: 90, diversion: 70, bano: 85, amor: 90, humor: 'feliz', x: 15, y: 55, cabello: 0, top: 0, accesorio: 0 },
+  { id: 'orion', nombre: 'Orión', emoji: '👦', color: '#00D4C8', hambre: 70, sueno: 60, diversion: 90, bano: 75, amor: 80, humor: 'normal', x: 35, y: 55, cabello: 1, top: 1, accesorio: 1 },
+  { id: 'cosmo', nombre: 'Cosmo', emoji: '🧑', color: '#FFD700', hambre: 95, sueno: 50, diversion: 80, bano: 90, amor: 70, humor: 'emocionado', x: 55, y: 55, cabello: 2, top: 2, accesorio: 2 },
+  { id: 'nebula', nombre: 'Nebula', emoji: '👩', color: '#FF6B9D', hambre: 60, sueno: 85, diversion: 75, bano: 80, amor: 95, humor: 'feliz', x: 75, y: 55, cabello: 3, top: 3, accesorio: 3 },
 ];
 
-const INIT_FURNITURE: Omit<FurnitureItem,'placed'|'dragging'|'zIndex'>[] = [
-  // Sala
-  { id:10, emoji:'🛋️', label:'Sofá',      x:3,  y:20, sz:62, room:'sala',   action:'fun',    color:'#C77DFF', layer:'back' },
-  { id:11, emoji:'📺', label:'Tele',       x:3,  y:32, sz:52, room:'sala',   action:'fun',    color:'#4D96FF', layer:'back' },
-  { id:12, emoji:'🎮', label:'Consola',    x:3,  y:44, sz:50, room:'sala',   action:'fun',    color:'#FF6B9D', layer:'front' },
-  { id:13, emoji:'🎵', label:'Parlante',   x:3,  y:56, sz:48, room:'sala',   action:'fun',    color:'#FFD700', layer:'front' },
-  { id:14, emoji:'🪴', label:'Planta',     x:3,  y:68, sz:46, room:'sala',   action:'fun',    color:'#7CFC00', layer:'back' },
-  // Cocina
-  { id:20, emoji:'🍕', label:'Pizza',      x:97, y:20, sz:52, room:'cocina', action:'hunger', color:'#FF8E53', layer:'front' },
-  { id:21, emoji:'🎂', label:'Torta',      x:97, y:32, sz:54, room:'cocina', action:'hunger', color:'#FF6B9D', layer:'front' },
-  { id:22, emoji:'🍦', label:'Helado',     x:97, y:44, sz:50, room:'cocina', action:'hunger', color:'#87CEEB', layer:'front' },
-  { id:23, emoji:'🍓', label:'Fresas',     x:97, y:56, sz:46, room:'cocina', action:'hunger', color:'#FF4444', layer:'front' },
-  { id:24, emoji:'🧁', label:'Cupcake',    x:97, y:68, sz:48, room:'cocina', action:'hunger', color:'#DDA0DD', layer:'front' },
-  // Dormitorio
-  { id:30, emoji:'🛏️', label:'Cama',       x:3,  y:77, sz:66, room:'dormi',  action:'sleep',  color:'#B8A9FF', layer:'back' },
-  { id:31, emoji:'🧸', label:'Osito',      x:3,  y:87, sz:50, room:'dormi',  action:'love',   color:'#FFD700', layer:'front' },
-  // Baño
-  { id:40, emoji:'🛁', label:'Bañera',     x:97, y:77, sz:64, room:'banyo',  action:'bath',   color:'#00D4C8', layer:'back' },
-  { id:41, emoji:'🪥', label:'Cepillo',    x:97, y:87, sz:46, room:'banyo',  action:'bath',   color:'#87CEEB', layer:'front' },
-  // Jardín
-  { id:50, emoji:'🌺', label:'Flores',     x:46, y:4,  sz:48, room:'jardin', action:'love',   color:'#FFB7C5', layer:'back' },
-  { id:51, emoji:'🦋', label:'Mariposa',   x:52, y:4,  sz:44, room:'jardin', action:'fun',    color:'#FF99CC', layer:'front' },
-  { id:52, emoji:'⚽', label:'Pelota',     x:58, y:4,  sz:48, room:'jardin', action:'fun',    color:'#7CFC00', layer:'front' },
-  { id:53, emoji:'🎨', label:'Pintura',    x:64, y:4,  sz:46, room:'jardin', action:'fun',    color:'#4D96FF', layer:'front' },
-  { id:54, emoji:'❤️', label:'Corazón',    x:70, y:4,  sz:42, room:'jardin', action:'love',   color:'#FF69B4', layer:'front' },
+const CABELLOS = ['👱','🧑','👩‍🦱','👩‍🦰','👨‍🦳','👩‍🦳','🧔','👲'];
+const TOPS = ['👕','🎽','🧥','👗','🥼','🧣','👘','🥻'];
+const ACCESORIOS = ['🎩','👒','⭐','🌟','💎','🌸','🎀','🦋'];
+
+const AMBIENTES: Ambiente[] = [
+  {
+    id: 0, nombre: 'Sala Orbital', emoji: '🛋️',
+    bg: 'linear-gradient(135deg,#1a0533 0%,#2d1060 50%,#1a0533 100%)',
+    accent: '#B8A9FF', floor: '#2d1060',
+    objetos: [
+      { id:'sofa',emoji:'🛋️',label:'Sofá holográfico',x:10,y:60,w:20,h:12,layer:'back',accion:'sentar',efecto:'💜',sonido:[523,587,659] },
+      { id:'tv',emoji:'📺',label:'Pantalla orbital',x:40,y:45,w:18,h:20,layer:'back',accion:'ver',efecto:'🎬',sonido:[800,600,400] },
+      { id:'mesa',emoji:'🪑',label:'Mesa flotante',x:35,y:70,w:12,h:8,layer:'back' },
+      { id:'lampara',emoji:'💡',label:'Lámpara estelar',x:75,y:42,w:8,h:15,layer:'back' },
+      { id:'alfombra',emoji:'🌀',label:'Alfombra galáctica',x:20,y:75,w:40,h:8,layer:'back' },
+      { id:'flor1',emoji:'🌸',label:'Rosa espacial',x:80,y:60,w:6,h:10,layer:'front' },
+      { id:'libro',emoji:'📖',label:'Libro de estrellas',x:45,y:75,w:8,h:6,layer:'front',accion:'leer',efecto:'📚',sonido:[440,523,587] },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa cósmica',x:60,y:48,w:6,h:6,layer:'front' },
+      { id:'gato',emoji:'🐱',label:'Gatito estelar',x:25,y:68,w:7,h:8,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,587,659,784] },
+      { id:'cojin',emoji:'💜',label:'Cojín suave',x:15,y:65,w:6,h:5,layer:'front',accion:'abrazar',efecto:'💜',sonido:[392,440,523] },
+      { id:'robot',emoji:'🤖',label:'Robot juguete',x:70,y:68,w:7,h:9,layer:'front',accion:'jugar',efecto:'⚡',sonido:[600,700,800,600] },
+      { id:'estrella1',emoji:'⭐',label:'Estrella deco',x:5,y:45,w:5,h:5,layer:'front' },
+      { id:'estrella2',emoji:'🌟',label:'Estrella brillante',x:90,y:50,w:5,h:5,layer:'front' },
+      { id:'cohete',emoji:'🚀',label:'Cohete juguete',x:82,y:72,w:7,h:8,layer:'front',accion:'jugar',efecto:'🚀',sonido:[400,500,700,900] },
+      { id:'burbuja',emoji:'🫧',label:'Burbujas mágicas',x:50,y:50,w:5,h:5,layer:'front' },
+      { id:'fruta',emoji:'🍎',label:'Manzana espacial',x:38,y:74,w:5,h:6,layer:'front',accion:'comer',efecto:'😋',sonido:[523,659,784] },
+    ]
+  },
+  {
+    id: 1, nombre: 'Cocina Atómica', emoji: '🍳',
+    bg: 'linear-gradient(135deg,#0d2b1a 0%,#1a5c35 50%,#0d2b1a 100%)',
+    accent: '#7CFC00', floor: '#1a4a2a',
+    objetos: [
+      { id:'estufa',emoji:'🍳',label:'Estufa nuclear',x:10,y:50,w:20,h:25,layer:'back',accion:'cocinar',efecto:'🔥',sonido:[300,400,500] },
+      { id:'nevera',emoji:'🧊',label:'Nevera cuántica',x:75,y:40,w:14,h:35,layer:'back',accion:'abrir',efecto:'❄️',sonido:[200,300,400] },
+      { id:'mesa',emoji:'🪵',label:'Mesa de cocina',x:30,y:65,w:35,h:10,layer:'back' },
+      { id:'pizza',emoji:'🍕',label:'Pizza galáctica',x:33,y:62,w:10,h:8,layer:'front',accion:'comer',efecto:'😋',sonido:[523,659,784,880] },
+      { id:'cake',emoji:'🎂',label:'Pastel estelar',x:48,y:62,w:9,h:9,layer:'front',accion:'comer',efecto:'🎉',sonido:[523,659,784,1046] },
+      { id:'fresas',emoji:'🍓',label:'Fresas mágicas',x:56,y:63,w:7,h:7,layer:'front',accion:'comer',efecto:'😋',sonido:[600,700,800] },
+      { id:'plantas',emoji:'🌿',label:'Hierbas aromáticas',x:72,y:42,w:6,h:8,layer:'front' },
+      { id:'pajarito',emoji:'🐦',label:'Pajarito cocinero',x:65,y:55,w:6,h:7,layer:'front',accion:'acariciar',efecto:'💕',sonido:[800,1000,800,1000] },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa dorada',x:40,y:45,w:5,h:5,layer:'front' },
+      { id:'flor2',emoji:'🌻',label:'Girasol solar',x:85,y:42,w:7,h:10,layer:'front' },
+      { id:'jugo',emoji:'🍹',label:'Jugo estelar',x:20,y:62,w:6,h:8,layer:'front',accion:'beber',efecto:'😊',sonido:[440,523,659] },
+      { id:'muffin',emoji:'🧁',label:'Cupcake nebula',x:43,y:62,w:7,h:8,layer:'front',accion:'comer',efecto:'😋',sonido:[523,659,784] },
+      { id:'arcoiris',emoji:'🌈',label:'Ventana arcoíris',x:0,y:35,w:10,h:15,layer:'back' },
+      { id:'horno',emoji:'🔥',label:'Horno orbital',x:60,y:50,w:15,h:20,layer:'back',accion:'cocinar',efecto:'🔥',sonido:[200,300,200] },
+      { id:'paloma',emoji:'🕊️',label:'Paloma mensajera',x:55,y:45,w:5,h:5,layer:'front' },
+      { id:'zanahoria',emoji:'🥕',label:'Zanahorias estelares',x:30,y:63,w:5,h:6,layer:'front',accion:'comer',efecto:'😋',sonido:[400,523,400] },
+    ]
+  },
+  {
+    id: 2, nombre: 'Jardín Estelar', emoji: '🌷',
+    bg: 'linear-gradient(135deg,#001233 0%,#0a2a6e 50%,#001233 100%)',
+    accent: '#00D4C8', floor: '#0a1f4a',
+    objetos: [
+      { id:'arbol1',emoji:'🌳',label:'Árbol cósmico',x:5,y:30,w:15,h:40,layer:'back' },
+      { id:'arbol2',emoji:'🌲',label:'Pino estelar',x:80,y:30,w:13,h:40,layer:'back' },
+      { id:'flores1',emoji:'🌸',label:'Flores rosadas',x:20,y:65,w:10,h:12,layer:'front' },
+      { id:'flores2',emoji:'🌺',label:'Flores tropicales',x:35,y:65,w:10,h:12,layer:'front' },
+      { id:'flores3',emoji:'🌼',label:'Flores amarillas',x:50,y:65,w:10,h:12,layer:'front' },
+      { id:'unicornio',emoji:'🦄',label:'Unicornio jardín',x:60,y:45,w:15,h:20,layer:'front',accion:'acariciar',efecto:'✨',sonido:[523,659,784,1046,784,659,523] },
+      { id:'mariposa1',emoji:'🦋',label:'Mariposa azul',x:30,y:45,w:6,h:6,layer:'front' },
+      { id:'mariposa2',emoji:'🦋',label:'Mariposa naranja',x:45,y:40,w:6,h:6,layer:'front' },
+      { id:'abeja',emoji:'🐝',label:'Abeja amigable',x:25,y:48,w:5,h:5,layer:'front' },
+      { id:'pajarito',emoji:'🐦',label:'Pajarito cantor',x:70,y:35,w:6,h:6,layer:'front',accion:'acariciar',efecto:'🎵',sonido:[880,1046,1175,880] },
+      { id:'conejo',emoji:'🐰',label:'Conejito jardín',x:38,y:68,w:7,h:8,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,659,784] },
+      { id:'luna',emoji:'🌙',label:'Luna brillante',x:85,y:5,w:8,h:8,layer:'back' },
+      { id:'estrellas',emoji:'✨',label:'Estrellas fugaces',x:50,y:8,w:10,h:8,layer:'back' },
+      { id:'fuente',emoji:'⛲',label:'Fuente espacial',x:42,y:55,w:14,h:18,layer:'back',accion:'tocar',efecto:'💧',sonido:[400,500,600,500,400] },
+      { id:'rana',emoji:'🐸',label:'Ranita saltarina',x:55,y:72,w:5,h:5,layer:'front',accion:'tocar',efecto:'😄',sonido:[200,200,400] },
+      { id:'mariposa3',emoji:'🦋',label:'Mariposa lila',x:75,y:55,w:6,h:6,layer:'front' },
+      { id:'nube',emoji:'☁️',label:'Nube suave',x:15,y:15,w:12,h:8,layer:'back' },
+    ]
+  },
+  {
+    id: 3, nombre: 'Laboratorio Galáctico', emoji: '🔭',
+    bg: 'linear-gradient(135deg,#0f0f2d 0%,#1a1a4a 50%,#0f0f2d 100%)',
+    accent: '#FFD700', floor: '#1a1a3a',
+    objetos: [
+      { id:'telescopio',emoji:'🔭',label:'Telescopio orbital',x:70,y:35,w:16,h:30,layer:'back',accion:'mirar',efecto:'🌟',sonido:[440,550,660,550,440] },
+      { id:'microscopio',emoji:'🔬',label:'Microscopio cuántico',x:15,y:45,w:14,h:25,layer:'back',accion:'observar',efecto:'🔬',sonido:[600,700,800] },
+      { id:'planeta1',emoji:'🪐',label:'Saturno miniatura',x:45,y:30,w:14,h:12,layer:'back' },
+      { id:'planeta2',emoji:'🌍',label:'La Tierra',x:30,y:40,w:10,h:10,layer:'back' },
+      { id:'robot',emoji:'🤖',label:'Robot asistente',x:55,y:55,w:10,h:15,layer:'front',accion:'activar',efecto:'⚡',sonido:[300,400,500,400,300] },
+      { id:'libro',emoji:'📚',label:'Libros científicos',x:5,y:55,w:12,h:12,layer:'front',accion:'leer',efecto:'💡',sonido:[440,523,587] },
+      { id:'cristal',emoji:'💎',label:'Cristal energético',x:40,y:60,w:8,h:10,layer:'front',accion:'tocar',efecto:'✨',sonido:[880,1046,1175] },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa científica',x:78,y:50,w:5,h:5,layer:'front' },
+      { id:'cohete',emoji:'🚀',label:'Modelo de cohete',x:85,y:45,w:8,h:15,layer:'front',accion:'lanzar',efecto:'🚀',sonido:[200,400,600,800,1000] },
+      { id:'sol',emoji:'☀️',label:'Sol miniatura',x:12,y:25,w:10,h:10,layer:'back' },
+      { id:'luna',emoji:'🌙',label:'Luna llena',x:35,y:20,w:9,h:9,layer:'back' },
+      { id:'pajarito',emoji:'🦜',label:'Loro científico',x:62,y:52,w:6,h:7,layer:'front',accion:'acariciar',efecto:'🎵',sonido:[700,800,900,800,700] },
+      { id:'globo',emoji:'🌐',label:'Globo holográfico',x:28,y:55,w:10,h:10,layer:'front',accion:'girar',efecto:'🌍',sonido:[400,450,500] },
+      { id:'flor',emoji:'🌺',label:'Flor luminosa',x:90,y:62,w:6,h:10,layer:'front' },
+      { id:'cometa',emoji:'☄️',label:'Cometa simulado',x:60,y:20,w:8,h:8,layer:'back' },
+      { id:'pez',emoji:'🐠',label:'Pez espacial',x:48,y:55,w:6,h:6,layer:'front' },
+    ]
+  },
+  {
+    id: 4, nombre: 'Habitación Luna', emoji: '🌙',
+    bg: 'linear-gradient(135deg,#1a0a2e 0%,#2e1a5c 50%,#1a0a2e 100%)',
+    accent: '#B8A9FF', floor: '#2a1550',
+    objetos: [
+      { id:'cama',emoji:'🛏️',label:'Cama de nubes',x:10,y:50,w:30,h:18,layer:'back',accion:'dormir',efecto:'💤',sonido:[261,329,392,261] },
+      { id:'armario',emoji:'🚪',label:'Armario estelar',x:75,y:35,w:16,h:40,layer:'back',accion:'abrir',efecto:'👗',sonido:[300,400,300] },
+      { id:'espejo',emoji:'🪞',label:'Espejo mágico',x:60,y:38,w:12,h:25,layer:'back',accion:'mirar',efecto:'✨',sonido:[440,550,660] },
+      { id:'osito',emoji:'🧸',label:'Osito cósmico',x:15,y:58,w:8,h:9,layer:'front',accion:'abrazar',efecto:'💜',sonido:[392,440,523] },
+      { id:'luna_deco',emoji:'🌙',label:'Luna decorativa',x:45,y:30,w:10,h:10,layer:'back' },
+      { id:'estrellas',emoji:'✨',label:'Móvil de estrellas',x:30,y:25,w:20,h:10,layer:'back' },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa nocturna',x:55,y:45,w:6,h:6,layer:'front' },
+      { id:'gato',emoji:'🐱',label:'Gatito dormilón',x:25,y:58,w:7,h:7,layer:'front',accion:'acariciar',efecto:'😴',sonido:[300,350,300] },
+      { id:'flores',emoji:'🌸',label:'Flores de noche',x:85,y:58,w:8,h:10,layer:'front' },
+      { id:'libro',emoji:'📖',label:'Libro de cuentos',x:42,y:62,w:8,h:6,layer:'front',accion:'leer',efecto:'💤',sonido:[261,329,392] },
+      { id:'lampara',emoji:'🪔',label:'Lámpara mágica',x:65,y:60,w:7,h:12,layer:'front',accion:'encender',efecto:'💡',sonido:[523,659,784] },
+      { id:'nube',emoji:'☁️',label:'Nube suave',x:5,y:35,w:15,h:8,layer:'back' },
+      { id:'conejo',emoji:'🐰',label:'Conejito de luna',x:35,y:60,w:7,h:8,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,659,523] },
+      { id:'corazon',emoji:'💜',label:'Corazón mágico',x:50,y:55,w:6,h:6,layer:'front',accion:'tocar',efecto:'💜',sonido:[523,659,784,1046] },
+      { id:'pijama',emoji:'🌙',label:'Pijama estrellado',x:78,y:58,w:8,h:9,layer:'front',accion:'ponerse',efecto:'😴',sonido:[300,350,400,350,300] },
+      { id:'muñeca',emoji:'🪆',label:'Muñeca galáctica',x:47,y:60,w:6,h:9,layer:'front',accion:'jugar',efecto:'💕',sonido:[523,587,659] },
+    ]
+  },
+  {
+    id: 5, nombre: 'Baño Galáctico', emoji: '🛁',
+    bg: 'linear-gradient(135deg,#003366 0%,#0055aa 50%,#003366 100%)',
+    accent: '#87CEEB', floor: '#004488',
+    objetos: [
+      { id:'banera',emoji:'🛁',label:'Bañera estelar',x:15,y:45,w:35,h:20,layer:'back',accion:'bañar',efecto:'🫧',sonido:[400,500,600,500,400] },
+      { id:'ducha',emoji:'🚿',label:'Ducha arcoíris',x:70,y:30,w:12,h:35,layer:'back',accion:'duchar',efecto:'💧',sonido:[300,400,500,400,300] },
+      { id:'lavabo',emoji:'🪥',label:'Lavabo orbital',x:58,y:45,w:14,h:18,layer:'back',accion:'lavar',efecto:'🫧',sonido:[400,500,400] },
+      { id:'pato',emoji:'🦆',label:'Patito de baño',x:20,y:50,w:7,h:7,layer:'front',accion:'jugar',efecto:'💛',sonido:[400,500,400,500] },
+      { id:'peces',emoji:'🐠',label:'Peces burbujas',x:30,y:52,w:8,h:6,layer:'front' },
+      { id:'flores_agua',emoji:'🌺',label:'Flores acuáticas',x:85,y:55,w:8,h:10,layer:'front' },
+      { id:'toalla',emoji:'🏳️',label:'Toalla estelar',x:85,y:38,w:8,h:15,layer:'back',accion:'secar',efecto:'✨',sonido:[300,400,500] },
+      { id:'burbuja1',emoji:'🫧',label:'Burbuja gigante',x:45,y:42,w:6,h:6,layer:'front' },
+      { id:'pez',emoji:'🐟',label:'Pez nadador',x:25,y:52,w:6,h:5,layer:'front',accion:'tocar',efecto:'💧',sonido:[400,500,600] },
+      { id:'arcoiris',emoji:'🌈',label:'Ventana arcoíris',x:0,y:30,w:10,h:15,layer:'back' },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa de agua',x:50,y:40,w:5,h:5,layer:'front' },
+      { id:'jabón',emoji:'🧼',label:'Jabón mágico',x:53,y:58,w:6,h:5,layer:'front',accion:'usar',efecto:'🫧',sonido:[500,600,700] },
+      { id:'caracol',emoji:'🐌',label:'Caracol amigable',x:40,y:62,w:5,h:4,layer:'front' },
+      { id:'cangrejo',emoji:'🦀',label:'Cangrejo feliz',x:10,y:62,w:6,h:5,layer:'front',accion:'tocar',efecto:'😄',sonido:[300,400,300,400] },
+      { id:'lirio',emoji:'⚜️',label:'Lirio acuático',x:55,y:44,w:5,h:7,layer:'front' },
+      { id:'espuma',emoji:'💦',label:'Espuma mágica',x:35,y:48,w:8,h:5,layer:'front' },
+    ]
+  },
+  {
+    id: 6, nombre: 'Sala de Juegos', emoji: '🎮',
+    bg: 'linear-gradient(135deg,#1a0020 0%,#3d004a 50%,#1a0020 100%)',
+    accent: '#FF6B9D', floor: '#2d0038',
+    objetos: [
+      { id:'tobogan',emoji:'🎢',label:'Tobogán espacial',x:5,y:30,w:25,h:45,layer:'back',accion:'usar',efecto:'🎉',sonido:[400,500,600,700,800,700,600,500,400] },
+      { id:'columpio',emoji:'🎠',label:'Columpio orbital',x:65,y:25,w:20,h:40,layer:'back',accion:'columpiarse',efecto:'😄',sonido:[300,400,500,400,300] },
+      { id:'pelota',emoji:'⚽',label:'Pelota galáctica',x:38,y:68,w:8,h:8,layer:'front',accion:'patear',efecto:'⚽',sonido:[200,400,200] },
+      { id:'dado',emoji:'🎲',label:'Dado de colores',x:52,y:68,w:7,h:7,layer:'front',accion:'lanzar',efecto:'🎲',sonido:[400,500,600] },
+      { id:'oso_peluche',emoji:'🧸',label:'Oso peluche',x:35,y:62,w:8,h:10,layer:'front',accion:'abrazar',efecto:'💕',sonido:[392,440,523] },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa juguetona',x:50,y:45,w:6,h:6,layer:'front' },
+      { id:'conejo',emoji:'🐰',label:'Conejito saltarín',x:48,y:62,w:7,h:8,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,659,523] },
+      { id:'estrellas',emoji:'🌟',label:'Estrellas giratorias',x:40,y:30,w:12,h:10,layer:'back' },
+      { id:'globos',emoji:'🎈',label:'Globos de colores',x:25,y:25,w:10,h:15,layer:'back' },
+      { id:'musica',emoji:'🎵',label:'Jukebox estelar',x:85,y:55,w:10,h:15,layer:'back',accion:'escuchar',efecto:'🎵',sonido:[261,329,392,523,659,784] },
+      { id:'cohete_juguete',emoji:'🚀',label:'Cohete de juguete',x:60,y:65,w:8,h:9,layer:'front',accion:'jugar',efecto:'🚀',sonido:[400,600,800,1000] },
+      { id:'pajarito',emoji:'🦜',label:'Loro bailarín',x:72,y:60,w:6,h:7,layer:'front',accion:'tocar',efecto:'🎵',sonido:[700,800,900,800] },
+      { id:'arco_iris',emoji:'🌈',label:'Arco iris deco',x:40,y:15,w:20,h:12,layer:'back' },
+      { id:'flor',emoji:'🌸',label:'Flor alegre',x:88,y:65,w:6,h:8,layer:'front' },
+      { id:'tren',emoji:'🚂',label:'Tren de juguete',x:18,y:65,w:12,h:6,layer:'front',accion:'activar',efecto:'🚂',sonido:[200,200,400,200,400] },
+      { id:'pintura',emoji:'🎨',label:'Kit de pintura',x:45,y:68,w:8,h:7,layer:'front',accion:'usar',efecto:'🎨',sonido:[523,659,784,523] },
+    ]
+  },
+  {
+    id: 7, nombre: 'Terraza Galáctica', emoji: '🌌',
+    bg: 'linear-gradient(180deg,#000011 0%,#000033 40%,#001155 100%)',
+    accent: '#FFD700', floor: '#001133',
+    objetos: [
+      { id:'telescopio',emoji:'🔭',label:'Telescopio gigante',x:70,y:35,w:18,h:30,layer:'back',accion:'mirar',efecto:'⭐',sonido:[440,550,660,770,880] },
+      { id:'hamaca',emoji:'🛋️',label:'Hamaca estelar',x:8,y:55,w:28,h:12,layer:'back',accion:'recostarse',efecto:'😌',sonido:[261,329,392] },
+      { id:'planeta1',emoji:'🪐',label:'Saturno real',x:40,y:20,w:18,h:14,layer:'back' },
+      { id:'luna',emoji:'🌕',label:'Luna llena',x:75,y:10,w:12,h:12,layer:'back' },
+      { id:'cometa',emoji:'☄️',label:'Cometa veloz',x:20,y:15,w:10,h:8,layer:'back' },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa nocturna',x:55,y:50,w:6,h:6,layer:'front' },
+      { id:'buho',emoji:'🦉',label:'Búho sabio',x:60,y:58,w:7,h:8,layer:'front',accion:'acariciar',efecto:'💕',sonido:[261,220,261,220] },
+      { id:'flor_noche',emoji:'🌸',label:'Flor de noche',x:85,y:62,w:7,h:10,layer:'front' },
+      { id:'luciernagas',emoji:'✨',label:'Luciérnagas',x:15,y:45,w:10,h:8,layer:'front' },
+      { id:'estrella1',emoji:'⭐',label:'Estrella brillante',x:5,y:20,w:6,h:6,layer:'back' },
+      { id:'estrella2',emoji:'🌟',label:'Estrella gigante',x:55,y:15,w:7,h:7,layer:'back' },
+      { id:'cohete',emoji:'🚀',label:'Cohete pasando',x:30,y:10,w:8,h:6,layer:'back' },
+      { id:'nube',emoji:'☁️',label:'Nube galáctica',x:45,y:38,w:12,h:7,layer:'back' },
+      { id:'pato',emoji:'🐦',label:'Pájaro nocturno',x:25,y:35,w:5,h:5,layer:'front' },
+      { id:'flores2',emoji:'🌺',label:'Flores estelares',x:2,y:62,w:8,h:10,layer:'front' },
+      { id:'silla',emoji:'🪑',label:'Silla astronómica',x:38,y:60,w:8,h:10,layer:'back',accion:'sentar',efecto:'😌',sonido:[392,440,392] },
+    ]
+  },
+  {
+    id: 8, nombre: 'Garaje Robótico', emoji: '🤖',
+    bg: 'linear-gradient(135deg,#1a1a00 0%,#333300 50%,#1a1a00 100%)',
+    accent: '#FFD700', floor: '#2a2a10',
+    objetos: [
+      { id:'robot_grande',emoji:'🤖',label:'Robot gigante',x:10,y:30,w:20,h:40,layer:'back',accion:'activar',efecto:'⚡',sonido:[200,300,400,300,200] },
+      { id:'auto',emoji:'🚗',label:'Auto volador',x:45,y:55,w:28,h:15,layer:'front',accion:'conducir',efecto:'🚗',sonido:[300,400,300] },
+      { id:'herramientas',emoji:'🔧',label:'Caja de herramientas',x:75,y:58,w:14,h:10,layer:'front',accion:'usar',efecto:'🔧',sonido:[400,300,400] },
+      { id:'engranaje',emoji:'⚙️',label:'Engranaje mágico',x:35,y:45,w:12,h:12,layer:'front',accion:'girar',efecto:'⚙️',sonido:[200,400,200,400] },
+      { id:'rayo',emoji:'⚡',label:'Generador eléctrico',x:80,y:35,w:12,h:20,layer:'back',accion:'activar',efecto:'⚡',sonido:[200,800,200] },
+      { id:'perro_robot',emoji:'🐕',label:'Perro robot',x:38,y:65,w:9,h:8,layer:'front',accion:'acariciar',efecto:'🤖',sonido:[400,500,400,300] },
+      { id:'flor_mecanica',emoji:'🌻',label:'Flor mecánica',x:72,y:55,w:7,h:10,layer:'front' },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa robótica',x:55,y:42,w:5,h:5,layer:'front' },
+      { id:'cohete_garaje',emoji:'🚀',label:'Cohete en garaje',x:60,y:28,w:12,h:22,layer:'back',accion:'revisar',efecto:'🚀',sonido:[400,600,800] },
+      { id:'computadora',emoji:'💻',label:'Computadora galáctica',x:25,y:58,w:13,h:10,layer:'front',accion:'usar',efecto:'💻',sonido:[523,659,784] },
+      { id:'lampara_robot',emoji:'💡',label:'Lámpara robótica',x:5,y:45,w:7,h:12,layer:'back' },
+      { id:'engranaje2',emoji:'⚙️',label:'Engranaje grande',x:48,y:40,w:10,h:10,layer:'back' },
+      { id:'pajarito',emoji:'🤖',label:'Pájaro robótico',x:67,y:50,w:5,h:6,layer:'front',accion:'activar',efecto:'⚡',sonido:[600,700,800] },
+      { id:'planta_garaje',emoji:'🌿',label:'Planta biónica',x:88,y:60,w:7,h:10,layer:'front' },
+      { id:'reloj',emoji:'⏰',label:'Reloj atómico',x:5,y:25,w:9,h:9,layer:'back' },
+      { id:'estrella',emoji:'⭐',label:'Estrella robot',x:40,y:30,w:6,h:6,layer:'back' },
+    ]
+  },
+  {
+    id: 9, nombre: 'Piscina Cósmica', emoji: '🏊',
+    bg: 'linear-gradient(180deg,#001a33 0%,#003366 50%,#0055aa 100%)',
+    accent: '#00D4C8', floor: '#003399',
+    objetos: [
+      { id:'piscina',emoji:'🏊',label:'Piscina galáctica',x:15,y:45,w:55,h:25,layer:'back',accion:'nadar',efecto:'💦',sonido:[300,400,500,400,300] },
+      { id:'tobogan_agua',emoji:'🌊',label:'Tobogán acuático',x:10,y:20,w:20,h:35,layer:'back',accion:'usar',efecto:'💦',sonido:[400,500,600,700,600,500] },
+      { id:'delfin',emoji:'🐬',label:'Delfín amigo',x:30,y:50,w:12,h:8,layer:'front',accion:'nadar con',efecto:'🐬',sonido:[700,800,900,800,700] },
+      { id:'peces',emoji:'🐠',label:'Peces de colores',x:45,y:55,w:10,h:6,layer:'front' },
+      { id:'pulpo',emoji:'🐙',label:'Pulpo amigable',x:55,y:55,w:9,h:8,layer:'front',accion:'tocar',efecto:'💜',sonido:[300,400,500,400] },
+      { id:'estrella_mar',emoji:'⭐',label:'Estrella de mar',x:62,y:58,w:7,h:7,layer:'front',accion:'recoger',efecto:'⭐',sonido:[523,659,784] },
+      { id:'pelota_agua',emoji:'🏐',label:'Pelota de agua',x:25,y:50,w:7,h:7,layer:'front',accion:'lanzar',efecto:'💦',sonido:[400,500,400] },
+      { id:'flamingo',emoji:'🦩',label:'Flamenco flotante',x:70,y:45,w:8,h:12,layer:'front',accion:'montar',efecto:'😄',sonido:[500,600,700] },
+      { id:'palmera',emoji:'🌴',label:'Palmera tropical',x:82,y:25,w:14,h:35,layer:'back' },
+      { id:'flor_agua',emoji:'🌺',label:'Flor acuática',x:85,y:60,w:7,h:9,layer:'front' },
+      { id:'sol',emoji:'☀️',label:'Sol brillante',x:45,y:5,w:12,h:12,layer:'back' },
+      { id:'nube',emoji:'☁️',label:'Nube suave',x:15,y:10,w:14,h:8,layer:'back' },
+      { id:'pato',emoji:'🦆',label:'Pato nadador',x:22,y:52,w:7,h:6,layer:'front',accion:'seguir',efecto:'💛',sonido:[400,500,400,500] },
+      { id:'tortuga',emoji:'🐢',label:'Tortuga marina',x:50,y:57,w:8,h:6,layer:'front',accion:'acariciar',efecto:'💚',sonido:[261,329,261] },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa tropical',x:75,y:35,w:5,h:5,layer:'front' },
+      { id:'arcoiris',emoji:'🌈',label:'Arco iris tropical',x:5,y:15,w:20,h:12,layer:'back' },
+    ]
+  },
+  {
+    id: 10, nombre: 'Biblioteca Estelar', emoji: '📚',
+    bg: 'linear-gradient(135deg,#1a0a00 0%,#3d2000 50%,#1a0a00 100%)',
+    accent: '#FFB347', floor: '#2d1800',
+    objetos: [
+      { id:'libreria1',emoji:'📚',label:'Estante A',x:0,y:20,w:14,h:55,layer:'back',accion:'explorar',efecto:'📖',sonido:[440,523,587] },
+      { id:'libreria2',emoji:'📖',label:'Estante B',x:15,y:20,w:14,h:55,layer:'back' },
+      { id:'libreria3',emoji:'📜',label:'Estante C',x:75,y:20,w:14,h:55,layer:'back' },
+      { id:'mesa_lectura',emoji:'🪵',label:'Mesa de lectura',x:30,y:58,w:35,h:12,layer:'back' },
+      { id:'sillon',emoji:'🛋️',label:'Sillón de leer',x:60,y:55,w:14,h:18,layer:'back',accion:'sentarse',efecto:'😌',sonido:[392,440,392] },
+      { id:'lampara',emoji:'🪔',label:'Lámpara de leer',x:56,y:45,w:7,h:13,layer:'front' },
+      { id:'buho',emoji:'🦉',label:'Búho bibliotecario',x:88,y:45,w:7,h:8,layer:'front',accion:'preguntar',efecto:'🦉',sonido:[261,220,261] },
+      { id:'libro_magico',emoji:'✨',label:'Libro mágico',x:35,y:56,w:8,h:7,layer:'front',accion:'abrir',efecto:'✨',sonido:[523,659,784,1046,784,659,523] },
+      { id:'pluma',emoji:'🪶',label:'Pluma escribiente',x:47,y:56,w:5,h:8,layer:'front',accion:'escribir',efecto:'✍️',sonido:[440,523,440] },
+      { id:'globo_terraqueo',emoji:'🌍',label:'Globo terráqueo',x:42,y:56,w:8,h:9,layer:'front',accion:'girar',efecto:'🌍',sonido:[400,500,600] },
+      { id:'gato_lector',emoji:'🐱',label:'Gatito lector',x:65,y:60,w:7,h:7,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,659,523] },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa lectora',x:30,y:45,w:5,h:5,layer:'front' },
+      { id:'flor_deco',emoji:'🌸',label:'Flores decorativas',x:25,y:55,w:7,h:9,layer:'front' },
+      { id:'estrella',emoji:'⭐',label:'Estrella sabia',x:50,y:38,w:5,h:5,layer:'back' },
+      { id:'reloj',emoji:'⏰',label:'Reloj antiguo',x:72,y:40,w:8,h:10,layer:'back' },
+      { id:'loro',emoji:'🦜',label:'Loro lector',x:20,y:50,w:5,h:6,layer:'front',accion:'hablar',efecto:'🎵',sonido:[700,800,700,900] },
+    ]
+  },
+  {
+    id: 11, nombre: 'Comedor Estelar', emoji: '🍽️',
+    bg: 'linear-gradient(135deg,#0a1a00 0%,#1a3500 50%,#0a1a00 100%)',
+    accent: '#90EE90', floor: '#152800',
+    objetos: [
+      { id:'mesa_grande',emoji:'🪵',label:'Mesa galáctica',x:20,y:52,w:55,h:12,layer:'back' },
+      { id:'sillas',emoji:'🪑',label:'Sillas orbitales',x:22,y:64,w:50,h:8,layer:'back' },
+      { id:'arreglo',emoji:'💐',label:'Centro de flores',x:43,y:48,w:12,h:10,layer:'front' },
+      { id:'pastel',emoji:'🎂',label:'Pastel de cumple',x:30,y:50,w:10,h:8,layer:'front',accion:'comer',efecto:'🎉',sonido:[523,659,784,1046,784,659,523] },
+      { id:'pizza',emoji:'🍕',label:'Pizza espacial',x:55,y:50,w:10,h:7,layer:'front',accion:'comer',efecto:'😋',sonido:[523,659,784] },
+      { id:'ensalada',emoji:'🥗',label:'Ensalada cósmica',x:43,y:57,w:8,h:6,layer:'front',accion:'comer',efecto:'😋',sonido:[400,523,400] },
+      { id:'jugo',emoji:'🍹',label:'Jugo de frutas',x:35,y:50,w:6,h:8,layer:'front',accion:'beber',efecto:'😊',sonido:[440,523,659] },
+      { id:'vela',emoji:'🕯️',label:'Velas estelares',x:65,y:48,w:5,h:9,layer:'front' },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa del jardín',x:72,y:45,w:5,h:5,layer:'front' },
+      { id:'ventana',emoji:'🌤️',label:'Ventana exterior',x:80,y:25,w:15,h:20,layer:'back' },
+      { id:'planta',emoji:'🌿',label:'Planta comedor',x:5,y:45,w:10,h:22,layer:'back' },
+      { id:'pajarito',emoji:'🐦',label:'Pajarito cantor',x:78,y:45,w:5,h:5,layer:'front',accion:'escuchar',efecto:'🎵',sonido:[880,1046,880] },
+      { id:'frutas',emoji:'🍎',label:'Frutero galáctico',x:70,y:52,w:9,h:7,layer:'front',accion:'comer',efecto:'😋',sonido:[523,659,784] },
+      { id:'manteles',emoji:'🌈',label:'Manteles de color',x:20,y:50,w:55,h:3,layer:'back' },
+      { id:'lampara',emoji:'💡',label:'Lámpara central',x:42,y:25,w:14,h:20,layer:'back' },
+      { id:'gato',emoji:'🐱',label:'Gatito curioso',x:15,y:63,w:6,h:7,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,659,523] },
+    ]
+  },
+  {
+    id: 12, nombre: 'Estudio Musical', emoji: '🎵',
+    bg: 'linear-gradient(135deg,#1a001a 0%,#3a003a 50%,#1a001a 100%)',
+    accent: '#FF69B4', floor: '#2a002a',
+    objetos: [
+      { id:'piano',emoji:'🎹',label:'Piano cósmico',x:5,y:45,w:28,h:20,layer:'back',accion:'tocar',efecto:'🎵',sonido:[261,329,392,523,392,329,261] },
+      { id:'guitarra',emoji:'🎸',label:'Guitarra estelar',x:45,y:38,w:12,h:28,layer:'back',accion:'tocar',efecto:'🎵',sonido:[329,392,440,523] },
+      { id:'bateria',emoji:'🥁',label:'Batería orbital',x:70,y:45,w:22,h:20,layer:'back',accion:'tocar',efecto:'🥁',sonido:[200,200,400,200,200,400] },
+      { id:'microfono',emoji:'🎤',label:'Micrófono galáctico',x:35,y:42,w:8,h:15,layer:'front',accion:'cantar',efecto:'🎤',sonido:[440,523,659,784] },
+      { id:'notas',emoji:'🎵',label:'Notas musicales',x:58,y:30,w:10,h:10,layer:'front' },
+      { id:'violin',emoji:'🎻',label:'Violín estelar',x:37,y:57,w:8,h:13,layer:'front',accion:'tocar',efecto:'🎵',sonido:[392,440,523,587] },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa musical',x:55,y:45,w:5,h:5,layer:'front' },
+      { id:'loro_musico',emoji:'🦜',label:'Loro músico',x:62,y:50,w:6,h:7,layer:'front',accion:'escuchar',efecto:'🎵',sonido:[700,800,900,800] },
+      { id:'disco',emoji:'💿',label:'Disco galáctico',x:22,y:65,w:8,h:8,layer:'front',accion:'poner',efecto:'🎵',sonido:[261,329,392,523,659,784] },
+      { id:'amplificador',emoji:'📻',label:'Amplificador estelar',x:82,y:58,w:10,h:12,layer:'back',accion:'encender',efecto:'🎵',sonido:[300,400,500] },
+      { id:'flores',emoji:'🌸',label:'Flores del estudio',x:90,y:62,w:8,h:10,layer:'front' },
+      { id:'auriculares',emoji:'🎧',label:'Auriculares galácticos',x:8,y:62,w:9,h:7,layer:'front',accion:'ponerse',efecto:'🎵',sonido:[523,659,784,523] },
+      { id:'luz',emoji:'💡',label:'Luces de escenario',x:35,y:20,w:28,h:10,layer:'back' },
+      { id:'arpa',emoji:'🪕',label:'Arpa cósmica',x:60,y:38,w:10,h:20,layer:'back',accion:'tocar',efecto:'🎵',sonido:[523,587,659,784,880] },
+      { id:'sol_musical',emoji:'☀️',label:'Sol de energía',x:20,y:25,w:10,h:10,layer:'back' },
+      { id:'gatito_musico',emoji:'🐱',label:'Gatito músico',x:50,y:65,w:6,h:7,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,659,784] },
+    ]
+  },
+  {
+    id: 13, nombre: 'Invernadero Galáctico', emoji: '🌿',
+    bg: 'linear-gradient(135deg,#002200 0%,#004400 50%,#002200 100%)',
+    accent: '#90EE90', floor: '#003300',
+    objetos: [
+      { id:'arbol_grande',emoji:'🌳',label:'Árbol del conocimiento',x:40,y:15,w:20,h:55,layer:'back' },
+      { id:'palmera',emoji:'🌴',label:'Palmera tropical',x:75,y:20,w:14,h:45,layer:'back' },
+      { id:'cactus',emoji:'🌵',label:'Cactus mágico',x:8,y:40,w:10,h:28,layer:'back' },
+      { id:'flores_rojas',emoji:'🌹',label:'Rosas estelares',x:20,y:62,w:10,h:14,layer:'front' },
+      { id:'orquideas',emoji:'🌺',label:'Orquídeas galácticas',x:32,y:62,w:10,h:12,layer:'front' },
+      { id:'girasoles',emoji:'🌻',label:'Girasoles solares',x:55,y:58,w:12,h:16,layer:'front' },
+      { id:'mariposa1',emoji:'🦋',label:'Mariposa de jardín',x:25,y:48,w:6,h:6,layer:'front' },
+      { id:'mariposa2',emoji:'🦋',label:'Mariposa azul',x:48,y:42,w:6,h:6,layer:'front' },
+      { id:'abeja',emoji:'🐝',label:'Abeja recolectora',x:35,y:45,w:5,h:5,layer:'front' },
+      { id:'colibrí',emoji:'🐦',label:'Colibrí mágico',x:62,y:40,w:5,h:5,layer:'front',accion:'observar',efecto:'💚',sonido:[800,900,1000,900,800] },
+      { id:'tortuga',emoji:'🐢',label:'Tortuga del jardín',x:18,y:70,w:7,h:6,layer:'front',accion:'acariciar',efecto:'💚',sonido:[261,329,261] },
+      { id:'rana',emoji:'🐸',label:'Rana salta hojas',x:30,y:70,w:6,h:5,layer:'front',accion:'seguir',efecto:'😄',sonido:[200,400,200] },
+      { id:'regadera',emoji:'🪣',label:'Regadera estelar',x:68,y:62,w:9,h:10,layer:'front',accion:'regar',efecto:'💧',sonido:[400,500,400] },
+      { id:'hongos',emoji:'🍄',label:'Hongos amigables',x:10,y:68,w:8,h:8,layer:'front' },
+      { id:'semilla',emoji:'🌱',label:'Semilla mágica',x:83,y:68,w:7,h:7,layer:'front',accion:'plantar',efecto:'🌱',sonido:[261,392,523] },
+      { id:'fresas',emoji:'🍓',label:'Fresa del jardín',x:45,y:68,w:6,h:6,layer:'front',accion:'comer',efecto:'😋',sonido:[523,659,784] },
+    ]
+  },
+  {
+    id: 14, nombre: 'Planetario', emoji: '🌌',
+    bg: 'linear-gradient(180deg,#000005 0%,#00001a 60%,#000033 100%)',
+    accent: '#B8A9FF', floor: '#00001a',
+    objetos: [
+      { id:'sol',emoji:'☀️',label:'El Sol',x:42,y:30,w:16,h:16,layer:'back',accion:'observar',efecto:'☀️',sonido:[440,550,660] },
+      { id:'mercurio',emoji:'🔴',label:'Mercurio',x:62,y:33,w:5,h:5,layer:'back' },
+      { id:'venus',emoji:'🟡',label:'Venus',x:70,y:32,w:7,h:7,layer:'back' },
+      { id:'tierra',emoji:'🌍',label:'La Tierra',x:80,y:30,w:9,h:9,layer:'back',accion:'tocar',efecto:'🌍',sonido:[400,500,600] },
+      { id:'marte',emoji:'🔴',label:'Marte',x:18,y:35,w:7,h:7,layer:'back' },
+      { id:'jupiter',emoji:'🟠',label:'Júpiter',x:10,y:28,w:14,h:12,layer:'back' },
+      { id:'saturno',emoji:'🪐',label:'Saturno',x:28,y:22,w:14,h:10,layer:'back',accion:'tocar',efecto:'🪐',sonido:[300,400,500] },
+      { id:'urano',emoji:'🔵',label:'Urano',x:8,y:52,w:10,h:10,layer:'back' },
+      { id:'neptuno',emoji:'💙',label:'Neptuno',x:20,y:55,w:10,h:10,layer:'back' },
+      { id:'luna',emoji:'🌕',label:'La Luna',x:85,y:42,w:8,h:8,layer:'back' },
+      { id:'cometa',emoji:'☄️',label:'Cometa Halley',x:50,y:12,w:10,h:6,layer:'back' },
+      { id:'estrella1',emoji:'⭐',label:'Estrella polar',x:35,y:15,w:6,h:6,layer:'back' },
+      { id:'galaxia',emoji:'🌌',label:'Galaxia lejana',x:65,y:15,w:14,h:8,layer:'back' },
+      { id:'astronauta',emoji:'👨‍🚀',label:'Astronauta',x:48,y:58,w:10,h:12,layer:'front',accion:'seguir',efecto:'🚀',sonido:[400,600,800,600,400] },
+      { id:'cohete',emoji:'🚀',label:'Nave espacial',x:62,y:55,w:10,h:13,layer:'front',accion:'subir',efecto:'🚀',sonido:[200,400,600,800,1000] },
+      { id:'alien',emoji:'👽',label:'Amigo alienígena',x:30,y:58,w:9,h:10,layer:'front',accion:'saludar',efecto:'👋',sonido:[600,700,800,700,600] },
+    ]
+  },
+  {
+    id: 15, nombre: 'Cuarto del Bebé', emoji: '🍼',
+    bg: 'linear-gradient(135deg,#fff0f5 0%,#ffe4f0 50%,#fff0f5 100%)',
+    accent: '#FFB3D1', floor: '#ffe0ec',
+    objetos: [
+      { id:'cuna',emoji:'🛏️',label:'Cuna de nubes',x:10,y:48,w:28,h:18,layer:'back',accion:'dormir',efecto:'💤',sonido:[261,329,392,261] },
+      { id:'movil',emoji:'🌈',label:'Móvil de colores',x:15,y:28,w:18,h:15,layer:'back' },
+      { id:'osito',emoji:'🧸',label:'Osito bebé',x:15,y:56,w:8,h:8,layer:'front',accion:'abrazar',efecto:'💕',sonido:[392,440,523] },
+      { id:'pelota_bebe',emoji:'🎾',label:'Pelotita suave',x:42,y:68,w:7,h:7,layer:'front',accion:'rodar',efecto:'😄',sonido:[400,500,400] },
+      { id:'sonajero',emoji:'🎵',label:'Sonajero musical',x:52,y:65,w:6,h:8,layer:'front',accion:'sonar',efecto:'🎵',sonido:[800,900,800,1000,800] },
+      { id:'pato_bebe',emoji:'🦆',label:'Patito de goma',x:28,y:56,w:6,h:6,layer:'front',accion:'apretar',efecto:'💛',sonido:[400,500,400,500] },
+      { id:'mariposa',emoji:'🦋',label:'Mariposa bebe',x:60,y:45,w:5,h:5,layer:'front' },
+      { id:'estrella_bebe',emoji:'⭐',label:'Estrellita',x:48,y:48,w:6,h:6,layer:'front' },
+      { id:'luna_bebe',emoji:'🌙',label:'Luna bebé',x:72,y:35,w:8,h:8,layer:'back' },
+      { id:'nubes',emoji:'☁️',label:'Nubecitas',x:40,y:20,w:20,h:10,layer:'back' },
+      { id:'conejo_bebe',emoji:'🐰',label:'Conejito bebé',x:62,y:62,w:6,h:7,layer:'front',accion:'abrazar',efecto:'💕',sonido:[523,659,523] },
+      { id:'flores_bebe',emoji:'🌸',label:'Flores de bebé',x:78,y:60,w:8,h:10,layer:'front' },
+      { id:'cambiador',emoji:'🛁',label:'Mesa de cambio',x:68,y:45,w:22,h:15,layer:'back',accion:'cambiar',efecto:'✨',sonido:[400,500,600] },
+      { id:'juguetes',emoji:'🎠',label:'Juguetes suaves',x:36,y:60,w:8,h:8,layer:'front',accion:'jugar',efecto:'😄',sonido:[523,659,784] },
+      { id:'biberón',emoji:'🍼',label:'Biberón de estrellas',x:22,y:64,w:5,h:8,layer:'front',accion:'dar',efecto:'😋',sonido:[400,500,400] },
+      { id:'corazon_deco',emoji:'💕',label:'Corazón decorativo',x:50,y:30,w:8,h:7,layer:'back' },
+    ]
+  },
 ];
 
-const ROOMS = [
-  { id:'sala',   label:'🛋️ Sala',     x:5,  y:12, w:40, h:42, bg:'rgba(180,120,255,.1)', bdr:'rgba(180,120,255,.35)', emoji:'🛋️' },
-  { id:'cocina', label:'🍕 Cocina',   x:55, y:12, w:40, h:42, bg:'rgba(255,160,80,.1)',  bdr:'rgba(255,160,80,.35)',  emoji:'🍕' },
-  { id:'dormi',  label:'🛏️ Dormi',   x:5,  y:60, w:40, h:32, bg:'rgba(130,100,220,.1)', bdr:'rgba(130,100,220,.35)', emoji:'🛏️' },
-  { id:'banyo',  label:'🛁 Baño',     x:55, y:60, w:40, h:32, bg:'rgba(0,200,200,.08)',  bdr:'rgba(0,200,200,.35)',   emoji:'🛁' },
+/* Agrega más ambientes hasta completar 28 */
+const AMBIENTES_EXTRA: Ambiente[] = [
+  { id:16, nombre:'Cocina Espacial', emoji:'🍜', bg:'linear-gradient(135deg,#1a0a00 0%,#3d2000 100%)', accent:'#FFA500', floor:'#2d1500',
+    objetos:[ {id:'olla',emoji:'🫕',label:'Olla galáctica',x:20,y:45,w:18,h:18,layer:'back',accion:'cocinar',efecto:'🔥',sonido:[300,400,500]}, {id:'ramen',emoji:'🍜',label:'Ramen estelar',x:45,y:58,w:10,h:8,layer:'front',accion:'comer',efecto:'😋',sonido:[523,659,784]}, {id:'sushi',emoji:'🍣',label:'Sushi cósmico',x:58,y:58,w:10,h:7,layer:'front',accion:'comer',efecto:'😋',sonido:[440,523,659]}, {id:'tacos',emoji:'🌮',label:'Tacos estelares',x:33,y:58,w:10,h:7,layer:'front',accion:'comer',efecto:'😋',sonido:[523,659,784]}, {id:'paloma',emoji:'🕊️',label:'Paloma cocinera',x:70,y:48,w:6,h:7,layer:'front'}, {id:'flores',emoji:'🌸',label:'Flores de cocina',x:82,y:55,w:8,h:10,layer:'front'}, {id:'mariposa',emoji:'🦋',label:'Mariposa',x:40,y:40,w:5,h:5,layer:'front'}, {id:'arbol_frutal',emoji:'🍎',label:'Árbol frutal',x:85,y:30,w:12,h:30,layer:'back'}, {id:'gato_chef',emoji:'🐱',label:'Gatito chef',x:60,y:65,w:7,h:7,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,659,523]}, {id:'helado',emoji:'🍦',label:'Helado espacial',x:72,y:62,w:6,h:9,layer:'front',accion:'comer',efecto:'😋',sonido:[659,784,880]}, {id:'estante',emoji:'🧂',label:'Estante especias',x:5,y:35,w:12,h:30,layer:'back'}, {id:'ventana',emoji:'🌤️',label:'Ventana cocina',x:0,y:25,w:10,h:18,layer:'back'}, {id:'colibrí',emoji:'🐦',label:'Colibrí frutal',x:25,y:38,w:5,h:5,layer:'front'}, {id:'platanos',emoji:'🍌',label:'Plátanos mágicos',x:15,y:62,w:7,h:7,layer:'front',accion:'comer',efecto:'😋',sonido:[400,523,400]}, {id:'lampara_coc',emoji:'💡',label:'Lámpara cocina',x:42,y:28,w:10,h:15,layer:'back'}, {id:'mariposa2',emoji:'🦋',label:'Mariposa dorada',x:68,y:38,w:5,h:5,layer:'front'}, ] },
+  { id:17, nombre:'Sala de Mascotas', emoji:'🐾', bg:'linear-gradient(135deg,#003300 0%,#006600 100%)', accent:'#90EE90', floor:'#004400',
+    objetos:[ {id:'perro',emoji:'🐕',label:'Perrito fiel',x:15,y:55,w:12,h:10,layer:'front',accion:'acariciar',efecto:'💕',sonido:[400,500,400,300,400]}, {id:'gato',emoji:'🐈',label:'Gatito travieso',x:35,y:52,w:10,h:10,layer:'front',accion:'acariciar',efecto:'😸',sonido:[523,659,784,523]}, {id:'conejo',emoji:'🐇',label:'Conejito blanco',x:55,y:56,w:9,h:9,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,659,523]}, {id:'hamster',emoji:'🐹',label:'Hámster jugador',x:70,y:60,w:7,h:7,layer:'front',accion:'jugar',efecto:'😄',sonido:[600,700,800]}, {id:'pez_pecera',emoji:'🐠',label:'Peces en pecera',x:80,y:45,w:12,h:15,layer:'back',accion:'observar',efecto:'💙',sonido:[400,500,600]}, {id:'pajarito_jaula',emoji:'🐦',label:'Pajarito cantor',x:5,y:35,w:10,h:15,layer:'back',accion:'escuchar',efecto:'🎵',sonido:[800,1000,800,1000]}, {id:'tortuga',emoji:'🐢',label:'Tortuga lenta',x:25,y:68,w:8,h:6,layer:'front',accion:'acariciar',efecto:'💚',sonido:[261,329,261]}, {id:'pelota_mascotas',emoji:'⚽',label:'Pelota de juego',x:43,y:68,w:7,h:7,layer:'front',accion:'lanzar',efecto:'🐕',sonido:[400,300,400]}, {id:'hueso',emoji:'🦴',label:'Hueso del perro',x:28,y:68,w:7,h:5,layer:'front',accion:'dar',efecto:'🐕',sonido:[300,400,300]}, {id:'arbol_mascotas',emoji:'🌳',label:'Árbol trepador',x:60,y:20,w:15,h:40,layer:'back'}, {id:'mariposa',emoji:'🦋',label:'Mariposa amiga',x:48,y:40,w:5,h:5,layer:'front'}, {id:'flores_pasto',emoji:'🌸',label:'Flores del prado',x:5,y:60,w:10,h:12,layer:'front'}, {id:'abeja',emoji:'🐝',label:'Abeja amigable',x:70,y:38,w:5,h:5,layer:'front'}, {id:'flor_girasol',emoji:'🌻',label:'Girasol mascota',x:88,y:55,w:8,h:12,layer:'front'}, {id:'comida_mascotas',emoji:'🥣',label:'Tazón de comida',x:15,y:65,w:8,h:6,layer:'front',accion:'dar',efecto:'😋',sonido:[400,500,400]}, {id:'loro',emoji:'🦜',label:'Loro conversador',x:42,y:35,w:6,h:7,layer:'front',accion:'hablar',efecto:'🎵',sonido:[700,800,900]} ] },
+  { id:18, nombre:'Taller Artístico', emoji:'🎨', bg:'linear-gradient(135deg,#1a001a 0%,#2a0040 100%)', accent:'#DDA0DD', floor:'#200030',
+    objetos:[ {id:'caballete',emoji:'🖼️',label:'Caballete mágico',x:15,y:35,w:16,h:35,layer:'back',accion:'pintar',efecto:'🎨',sonido:[523,659,784,523]}, {id:'paleta',emoji:'🎨',label:'Paleta de colores',x:38,y:60,w:12,h:8,layer:'front',accion:'usar',efecto:'🎨',sonido:[523,659,784]}, {id:'pincel_grande',emoji:'🖌️',label:'Pincel galáctico',x:53,y:55,w:6,h:14,layer:'front',accion:'pintar',efecto:'🌈',sonido:[440,523,587]}, {id:'esculturas',emoji:'🏺',label:'Escultura estelar',x:68,y:52,w:10,h:13,layer:'front',accion:'tocar',efecto:'✨',sonido:[400,500,600]}, {id:'mariposa_arte',emoji:'🦋',label:'Mariposa artista',x:45,y:40,w:5,h:5,layer:'front'}, {id:'flores_arte',emoji:'🌸',label:'Flores inspiradoras',x:82,y:58,w:8,h:10,layer:'front'}, {id:'luz_estudio',emoji:'💡',label:'Luz de estudio',x:50,y:22,w:10,h:15,layer:'back'}, {id:'lápices',emoji:'✏️',label:'Lápices mágicos',x:30,y:62,w:8,h:8,layer:'front',accion:'usar',efecto:'✏️',sonido:[440,523,440]}, {id:'tijeras',emoji:'✂️',label:'Tijeras estelares',x:22,y:63,w:6,h:6,layer:'front'}, {id:'gato_artista',emoji:'🐱',label:'Gatito artista',x:60,y:62,w:7,h:7,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,659,523]}, {id:'origami',emoji:'🦢',label:'Origami cisne',x:75,y:60,w:7,h:8,layer:'front',accion:'hacer',efecto:'🦢',sonido:[523,659,784]}, {id:'cinta',emoji:'🎀',label:'Cinta decorativa',x:10,y:60,w:7,h:5,layer:'front'}, {id:'estrellas_arte',emoji:'⭐',label:'Estrellas de papel',x:40,y:28,w:10,h:8,layer:'back'}, {id:'loro_arte',emoji:'🦜',label:'Loro crítico',x:85,y:42,w:6,h:7,layer:'front',accion:'escuchar',efecto:'🎨',sonido:[700,800,900]}, {id:'ventana_arte',emoji:'🌈',label:'Ventana de color',x:0,y:28,w:10,h:18,layer:'back'}, {id:'corazon_arte',emoji:'💜',label:'Corazón de arte',x:52,y:38,w:6,h:6,layer:'front'} ] },
+  { id:19, nombre:'Parque Exterior', emoji:'🌳', bg:'linear-gradient(180deg,#87CEEB 0%,#98FB98 60%,#228B22 100%)', accent:'#228B22', floor:'#2d8a2d',
+    objetos:[ {id:'columpio',emoji:'🎠',label:'Columpio del parque',x:10,y:30,w:18,h:40,layer:'back',accion:'columpiarse',efecto:'😄',sonido:[400,500,600,500,400]}, {id:'tobogan',emoji:'🎢',label:'Tobogán del parque',x:72,y:20,w:20,h:45,layer:'back',accion:'bajar',efecto:'🎉',sonido:[400,500,600,700,800]}, {id:'árbol1',emoji:'🌳',label:'Roble gigante',x:30,y:15,w:18,h:45,layer:'back'}, {id:'árbol2',emoji:'🌲',label:'Pino del parque',x:55,y:20,w:14,h:42,layer:'back'}, {id:'flores_parque',emoji:'🌼',label:'Margaritas del prado',x:15,y:68,w:18,h:10,layer:'front'}, {id:'mariposa1',emoji:'🦋',label:'Mariposa del parque',x:40,y:42,w:6,h:6,layer:'front'}, {id:'mariposa2',emoji:'🦋',label:'Mariposa naranja',x:65,y:38,w:6,h:6,layer:'front'}, {id:'abeja',emoji:'🐝',label:'Abeja del prado',x:35,y:48,w:5,h:5,layer:'front'}, {id:'perro',emoji:'🐕',label:'Perrito paseando',x:20,y:63,w:10,h:8,layer:'front',accion:'acariciar',efecto:'💕',sonido:[400,500,400]}, {id:'pato_parque',emoji:'🦆',label:'Pato del lago',x:45,y:62,w:8,h:7,layer:'front',accion:'seguir',efecto:'💛',sonido:[400,500,400]}, {id:'conejo_parque',emoji:'🐰',label:'Conejito saltarín',x:60,y:65,w:7,h:7,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,659,523]}, {id:'sol_parque',emoji:'☀️',label:'Sol del mediodía',x:80,y:5,w:12,h:12,layer:'back'}, {id:'nube1',emoji:'☁️',label:'Nube esponjosa',x:20,y:8,w:14,h:8,layer:'back'}, {id:'nube2',emoji:'☁️',label:'Nube suave',x:50,y:5,w:12,h:7,layer:'back'}, {id:'arcoiris',emoji:'🌈',label:'Arco iris parque',x:35,y:10,w:28,h:15,layer:'back'}, {id:'ardilla',emoji:'🐿️',label:'Ardilla del roble',x:38,y:55,w:5,h:6,layer:'front',accion:'dar comida',efecto:'🌰',sonido:[600,700,600]} ] },
+  { id:20, nombre:'Cuarto de Manualidades', emoji:'✂️', bg:'linear-gradient(135deg,#1a1a00 0%,#3a3800 100%)', accent:'#FFD700', floor:'#2a2800',
+    objetos:[ {id:'mesa_manu',emoji:'🪵',label:'Mesa de trabajos',x:15,y:52,w:55,h:12,layer:'back'}, {id:'lanas',emoji:'🧶',label:'Lanas de colores',x:20,y:50,w:12,h:8,layer:'front',accion:'usar',efecto:'🌈',sonido:[440,523,587]}, {id:'botones',emoji:'🔵',label:'Botones estelares',x:35,y:50,w:8,h:7,layer:'front'}, {id:'tela',emoji:'🎀',label:'Telas de colores',x:45,y:50,w:12,h:7,layer:'front',accion:'cortar',efecto:'✂️',sonido:[300,400,300]}, {id:'aguja',emoji:'🧵',label:'Hilo y aguja',x:58,y:50,w:7,h:7,layer:'front'}, {id:'cinta_manu',emoji:'🎗️',label:'Cinta mágica',x:32,y:58,w:7,h:5,layer:'front'}, {id:'mariposa_manu',emoji:'🦋',label:'Mariposa de papel',x:65,y:45,w:6,h:5,layer:'front',accion:'hacer',efecto:'🦋',sonido:[523,659,784]}, {id:'flor_manu',emoji:'🌸',label:'Flor tejida',x:75,y:55,w:7,h:8,layer:'front',accion:'hacer',efecto:'🌸',sonido:[440,523,659]}, {id:'oveja',emoji:'🐑',label:'Ovejita de lana',x:10,y:62,w:9,h:8,layer:'front',accion:'acariciar',efecto:'💕',sonido:[300,400,300]}, {id:'gusano',emoji:'🐛',label:'Gusanito de seda',x:42,y:64,w:6,h:4,layer:'front'}, {id:'robot_manu',emoji:'🤖',label:'Robot de cartón',x:70,y:55,w:9,h:10,layer:'front',accion:'animar',efecto:'⚡',sonido:[300,400,500]}, {id:'estrella_manu',emoji:'⭐',label:'Estrella de foami',x:53,y:55,w:6,h:6,layer:'front',accion:'hacer',efecto:'⭐',sonido:[523,659,784]}, {id:'corazon_manu',emoji:'💛',label:'Corazón bordado',x:47,y:57,w:5,h:5,layer:'front'}, {id:'lampara_manu',emoji:'💡',label:'Lámpara de trabajo',x:78,y:38,w:8,h:15,layer:'back'}, {id:'caja_manu',emoji:'📦',label:'Caja de materiales',x:85,y:60,w:10,h:12,layer:'back',accion:'abrir',efecto:'✨',sonido:[400,500,400]}, {id:'pintura_manu',emoji:'🎨',label:'Pinturas de dedo',x:25,y:63,w:8,h:6,layer:'front',accion:'usar',efecto:'🌈',sonido:[523,659,784]} ] },
+  { id:21, nombre:'Sala de Meditación', emoji:'🧘', bg:'linear-gradient(135deg,#0a001a 0%,#1a0035 100%)', accent:'#B8A9FF', floor:'#150028',
+    objetos:[ {id:'cojin_medit',emoji:'🪷',label:'Cojín de meditación',x:38,y:58,w:14,h:8,layer:'back',accion:'sentarse',efecto:'✨',sonido:[261,329,392,329,261]}, {id:'velas_medit',emoji:'🕯️',label:'Velas de armonía',x:20,y:55,w:10,h:12,layer:'front'}, {id:'incienso',emoji:'🌿',label:'Incienso natural',x:68,y:52,w:8,h:14,layer:'front'}, {id:'cristal_medit',emoji:'💎',label:'Cristal curativo',x:50,y:56,w:8,h:9,layer:'front',accion:'tocar',efecto:'✨',sonido:[880,1046,1175,1046,880]}, {id:'flores_medit',emoji:'🌺',label:'Flores de loto',x:30,y:60,w:9,h:9,layer:'front'}, {id:'mariposa_medit',emoji:'🦋',label:'Mariposa de paz',x:45,y:42,w:6,h:6,layer:'front'}, {id:'luna_medit',emoji:'🌙',label:'Luna meditativa',x:45,y:15,w:10,h:10,layer:'back'}, {id:'estrellas_medit',emoji:'✨',label:'Estrellas de paz',x:25,y:20,w:20,h:8,layer:'back'}, {id:'arbol_bonsai',emoji:'🌱',label:'Bonsai galáctico',x:78,y:48,w:12,h:18,layer:'front'}, {id:'musica_medit',emoji:'🎵',label:'Música de paz',x:10,y:52,w:8,h:8,layer:'front',accion:'escuchar',efecto:'🎵',sonido:[261,329,392,523,392,329,261]}, {id:'libro_medit',emoji:'📖',label:'Libro de sabiduría',x:58,y:62,w:8,h:6,layer:'front',accion:'leer',efecto:'💡',sonido:[440,523,587]}, {id:'pluma_medit',emoji:'🪶',label:'Pluma de paz',x:40,y:50,w:5,h:8,layer:'front'}, {id:'arcoiris_suave',emoji:'🌈',label:'Arco iris suave',x:15,y:30,w:22,h:12,layer:'back'}, {id:'nubes_suaves',emoji:'☁️',label:'Nubes suaves',x:60,y:25,w:15,h:8,layer:'back'}, {id:'tortuga_medit',emoji:'🐢',label:'Tortuga sabia',x:22,y:65,w:7,h:6,layer:'front',accion:'acariciar',efecto:'💚',sonido:[261,329,261]}, {id:'buho_medit',emoji:'🦉',label:'Búho meditador',x:84,y:65,w:7,h:8,layer:'front',accion:'preguntar',efecto:'🦉',sonido:[261,220,261]} ] },
+  { id:22, nombre:'Taller de Ciencias', emoji:'🧪', bg:'linear-gradient(135deg,#001a33 0%,#003366 100%)', accent:'#87CEEB', floor:'#002244',
+    objetos:[ {id:'microscopio',emoji:'🔬',label:'Microscopio cuántico',x:12,y:40,w:14,h:28,layer:'back',accion:'observar',efecto:'🔬',sonido:[600,700,800]}, {id:'probetas',emoji:'🧪',label:'Probetas de colores',x:30,y:48,w:12,h:20,layer:'front',accion:'mezclar',efecto:'✨',sonido:[400,500,600,700]}, {id:'abaco',emoji:'🔢',label:'Ábaco galáctico',x:65,y:52,w:12,h:14,layer:'front',accion:'usar',efecto:'💡',sonido:[440,523,587]}, {id:'tierra_ciencias',emoji:'🌍',label:'Globo terráqueo',x:50,y:48,w:10,h:10,layer:'front',accion:'girar',efecto:'🌍',sonido:[400,500,600]}, {id:'planta_exp',emoji:'🌱',label:'Planta experimento',x:78,y:50,w:8,h:14,layer:'front'}, {id:'mariposa_cien',emoji:'🦋',label:'Mariposa de estudio',x:44,y:38,w:5,h:5,layer:'front'}, {id:'arbol_cien',emoji:'🌳',label:'Árbol de la vida',x:85,y:25,w:12,h:40,layer:'back'}, {id:'pez_cien',emoji:'🐠',label:'Pez de estudio',x:58,y:60,w:7,h:5,layer:'front'}, {id:'luna_cien',emoji:'🌙',label:'Luna de análisis',x:35,y:20,w:8,h:8,layer:'back'}, {id:'sol_cien',emoji:'☀️',label:'Sol de energía',x:55,y:18,w:10,h:10,layer:'back'}, {id:'colibri_cien',emoji:'🐦',label:'Colibrí observador',x:25,y:42,w:5,h:5,layer:'front'}, {id:'rana_cien',emoji:'🐸',label:'Rana de laboratorio',x:22,y:66,w:6,h:5,layer:'front',accion:'observar',efecto:'🔬',sonido:[200,400,200]}, {id:'robot_cien',emoji:'🤖',label:'Robot asistente',x:70,y:42,w:10,h:18,layer:'back',accion:'preguntar',efecto:'💡',sonido:[300,400,500]}, {id:'libreta',emoji:'📓',label:'Libreta de notas',x:40,y:60,w:8,h:8,layer:'front',accion:'escribir',efecto:'✍️',sonido:[440,523,440]}, {id:'lupa',emoji:'🔍',label:'Lupa exploradora',x:32,y:62,w:7,h:7,layer:'front',accion:'buscar',efecto:'🔍',sonido:[523,659,784]}, {id:'cristal_exp',emoji:'💎',label:'Cristal experimento',x:48,y:60,w:7,h:8,layer:'front',accion:'tocar',efecto:'✨',sonido:[880,1046,1175]} ] },
+  { id:23, nombre:'Granja Cosmica', emoji:'🐄', bg:'linear-gradient(180deg,#87CEEB 0%,#FFF8E7 40%,#8B6914 100%)', accent:'#F4A460', floor:'#8B6914',
+    objetos:[ {id:'vaca',emoji:'🐄',label:'Vaca cosmica',x:10,y:45,w:18,h:18,layer:'front',accion:'acariciar',efecto:'🥛',sonido:[200,300,200,300]}, {id:'caballo',emoji:'🐎',label:'Caballo estelar',x:35,y:40,w:18,h:22,layer:'front',accion:'montar',efecto:'🌟',sonido:[300,400,500,400,300]}, {id:'oveja',emoji:'🐑',label:'Oveja de nube',x:60,y:48,w:12,h:12,layer:'front',accion:'acariciar',efecto:'💕',sonido:[300,400,300]}, {id:'pato_granja',emoji:'🦆',label:'Pato de estanque',x:78,y:55,w:8,h:7,layer:'front',accion:'seguir',efecto:'💛',sonido:[400,500,400]}, {id:'gallina',emoji:'🐔',label:'Gallina ponedora',x:25,y:60,w:10,h:9,layer:'front',accion:'seguir',efecto:'🥚',sonido:[300,400,300,400]}, {id:'pollito',emoji:'🐥',label:'Pollito amarillo',x:38,y:63,w:6,h:6,layer:'front',accion:'acariciar',efecto:'💛',sonido:[800,900,800]}, {id:'árbol_manzano',emoji:'🍎',label:'Manzano galáctico',x:85,y:20,w:14,h:40,layer:'back'}, {id:'arbol_frutal2',emoji:'🍊',label:'Naranjo estelar',x:5,y:25,w:12,h:35,layer:'back'}, {id:'flores_campo',emoji:'🌻',label:'Girasoles del campo',x:45,y:62,w:12,h:14,layer:'front'}, {id:'mariposa_granja',emoji:'🦋',label:'Mariposa del campo',x:55,y:40,w:5,h:5,layer:'front'}, {id:'abeja_granja',emoji:'🐝',label:'Abeja de la granja',x:68,y:38,w:5,h:5,layer:'front'}, {id:'conejo_granja',emoji:'🐰',label:'Conejito campesino',x:70,y:62,w:7,h:7,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,659,523]}, {id:'sol_granja',emoji:'☀️',label:'Sol del campo',x:45,y:5,w:12,h:12,layer:'back'}, {id:'nube_granja',emoji:'☁️',label:'Nube blanca',x:20,y:8,w:14,h:8,layer:'back'}, {id:'colibri_granja',emoji:'🐦',label:'Pájaro cantor',x:30,y:38,w:5,h:5,layer:'front',accion:'escuchar',efecto:'🎵',sonido:[800,900,1000,900]}, {id:'flor_silvestre',emoji:'🌷',label:'Flor silvestre',x:18,y:65,w:7,h:10,layer:'front'} ] },
+  { id:24, nombre:'Cueva de Cristales', emoji:'💎', bg:'linear-gradient(135deg,#0a0a1a 0%,#1a1a3a 100%)', accent:'#A0E0FF', floor:'#15152d',
+    objetos:[ {id:'cristal1',emoji:'💎',label:'Cristal azul',x:5,y:30,w:14,h:30,layer:'back',accion:'tocar',efecto:'✨',sonido:[880,1046,1175]}, {id:'cristal2',emoji:'💜',label:'Cristal violeta',x:22,y:25,w:12,h:32,layer:'back',accion:'tocar',efecto:'✨',sonido:[784,880,1046]}, {id:'cristal3',emoji:'💚',label:'Cristal verde',x:70,y:28,w:12,h:28,layer:'back',accion:'tocar',efecto:'✨',sonido:[659,784,880]}, {id:'cristal4',emoji:'💛',label:'Cristal dorado',x:82,y:32,w:10,h:25,layer:'back',accion:'tocar',efecto:'✨',sonido:[523,659,784]}, {id:'roca_brillo',emoji:'🪨',label:'Roca brillante',x:35,y:55,w:12,h:10,layer:'front'}, {id:'flor_cueva',emoji:'🌸',label:'Flor de cueva',x:48,y:58,w:8,h:9,layer:'front'}, {id:'hada',emoji:'🧚',label:'Hadita de cristal',x:42,y:40,w:8,h:10,layer:'front',accion:'seguir',efecto:'✨',sonido:[880,1046,1175,1046,880]}, {id:'mariposa_cueva',emoji:'🦋',label:'Mariposa de luz',x:58,y:38,w:6,h:6,layer:'front'}, {id:'luciernaga',emoji:'✨',label:'Luciérnagas',x:32,y:42,w:8,h:6,layer:'front'}, {id:'rana_cueva',emoji:'🐸',label:'Rana de cueva',x:25,y:65,w:6,h:5,layer:'front',accion:'seguir',efecto:'😄',sonido:[200,400,200]}, {id:'estrella_cueva',emoji:'⭐',label:'Estrella de roca',x:60,y:55,w:6,h:6,layer:'front'}, {id:'pez_cueva',emoji:'🐠',label:'Pez de caverna',x:70,y:60,w:7,h:5,layer:'front'}, {id:'tortuga_cueva',emoji:'🐢',label:'Tortuga de cristal',x:15,y:63,w:7,h:6,layer:'front',accion:'acariciar',efecto:'💚',sonido:[261,329,261]}, {id:'caracol_cueva',emoji:'🐌',label:'Caracol dorado',x:45,y:65,w:6,h:5,layer:'front'}, {id:'hongo_cueva',emoji:'🍄',label:'Hongo brillante',x:78,y:60,w:8,h:8,layer:'front'}, {id:'flor_cristal',emoji:'🌺',label:'Flor cristalina',x:55,y:60,w:7,h:8,layer:'front',accion:'tocar',efecto:'✨',sonido:[523,659,784]} ] },
+  { id:25, nombre:'Teatro Estelar', emoji:'🎭', bg:'linear-gradient(135deg,#1a0000 0%,#3d0000 100%)', accent:'#FFD700', floor:'#2d0000',
+    objetos:[ {id:'escenario',emoji:'🎭',label:'Escenario galáctico',x:15,y:45,w:60,h:8,layer:'back'}, {id:'cortinas',emoji:'🎪',label:'Cortinas de gala',x:5,y:20,w:12,h:50,layer:'back'}, {id:'cortinas2',emoji:'🎪',label:'Cortinas derechas',x:82,y:20,w:12,h:50,layer:'back'}, {id:'micro_teatro',emoji:'🎤',label:'Micrófono del actor',x:45,y:38,w:7,h:12,layer:'front',accion:'cantar',efecto:'🎤',sonido:[440,523,659,784]}, {id:'marioneta',emoji:'🪆',label:'Marioneta estelar',x:30,y:35,w:8,h:14,layer:'front',accion:'animar',efecto:'🎭',sonido:[523,587,659]}, {id:'loro_teatro',emoji:'🦜',label:'Loro actor',x:60,y:38,w:7,h:8,layer:'front',accion:'escuchar',efecto:'🎵',sonido:[700,800,900]}, {id:'mariposa_teatro',emoji:'🦋',label:'Mariposa bailarina',x:42,y:30,w:6,h:6,layer:'front'}, {id:'flores_teatro',emoji:'🌹',label:'Rosas del teatro',x:72,y:55,w:10,h:12,layer:'front'}, {id:'nota_teatro',emoji:'🎵',label:'Notas musicales',x:55,y:28,w:8,h:8,layer:'front'}, {id:'estrella_teatro',emoji:'⭐',label:'Estrella del show',x:42,y:20,w:8,h:8,layer:'back'}, {id:'luces_teatro',emoji:'💡',label:'Luces de escena',x:28,y:18,w:38,h:10,layer:'back'}, {id:'globo_teatro',emoji:'🎈',label:'Globos de fiesta',x:18,y:28,w:10,h:15,layer:'front'}, {id:'unicornio_teatro',emoji:'🦄',label:'Unicornio de gala',x:12,y:45,w:12,h:16,layer:'front',accion:'acariciar',efecto:'✨',sonido:[523,659,784,1046,784,659,523]}, {id:'conejo_teatro',emoji:'🐰',label:'Mago conejo',x:68,y:45,w:8,h:10,layer:'front',accion:'sorprender',efecto:'🎩',sonido:[523,659,784]}, {id:'paloma_teatro',emoji:'🕊️',label:'Paloma mágica',x:55,y:45,w:6,h:7,layer:'front',accion:'lanzar',efecto:'✨',sonido:[800,900,1000]}, {id:'corona',emoji:'👑',label:'Corona real',x:42,y:50,w:8,h:6,layer:'front',accion:'ponerse',efecto:'👑',sonido:[659,784,880]} ] },
+  { id:26, nombre:'Mundo Submarino', emoji:'🌊', bg:'linear-gradient(180deg,#001a33 0%,#003366 50%,#0044aa 100%)', accent:'#00CED1', floor:'#002255',
+    objetos:[ {id:'delfin_sub',emoji:'🐬',label:'Delfín amigable',x:15,y:40,w:15,h:10,layer:'front',accion:'nadar con',efecto:'🐬',sonido:[700,800,900,800,700]}, {id:'ballena',emoji:'🐋',label:'Ballena azul',x:45,y:25,w:30,h:20,layer:'back',accion:'saludar',efecto:'🌊',sonido:[200,300,200]}, {id:'pulpo_sub',emoji:'🐙',label:'Pulpo de colores',x:10,y:58,w:12,h:10,layer:'front',accion:'abrazar',efecto:'💜',sonido:[300,400,500,400]}, {id:'tortuga_sub',emoji:'🐢',label:'Tortuga marina',x:65,y:45,w:12,h:10,layer:'front',accion:'acariciar',efecto:'💚',sonido:[261,329,261]}, {id:'pez1',emoji:'🐠',label:'Pez payaso',x:30,y:55,w:7,h:6,layer:'front',accion:'seguir',efecto:'🐠',sonido:[400,500,600]}, {id:'pez2',emoji:'🐟',label:'Pez azul',x:42,y:52,w:7,h:5,layer:'front'}, {id:'coral1',emoji:'🪸',label:'Coral rosado',x:20,y:65,w:10,h:10,layer:'front'}, {id:'coral2',emoji:'🌺',label:'Coral flor',x:50,y:65,w:10,h:9,layer:'front'}, {id:'coral3',emoji:'🪸',label:'Coral naranja',x:72,y:65,w:10,h:10,layer:'front'}, {id:'estrella_mar_sub',emoji:'⭐',label:'Estrella de mar',x:35,y:66,w:7,h:7,layer:'front',accion:'recoger',efecto:'⭐',sonido:[523,659,784]}, {id:'caballito_mar',emoji:'🐴',label:'Caballito de mar',x:80,y:48,w:6,h:9,layer:'front',accion:'acariciar',efecto:'💕',sonido:[523,659,784]}, {id:'medusa',emoji:'🪼',label:'Medusa brillante',x:58,y:35,w:8,h:10,layer:'front'}, {id:'cangrejo_sub',emoji:'🦀',label:'Cangrejo feliz',x:28,y:68,w:7,h:6,layer:'front',accion:'tocar',efecto:'😄',sonido:[300,400,300]}, {id:'algas',emoji:'🌿',label:'Algas del fondo',x:5,y:55,w:8,h:18,layer:'back'}, {id:'perla',emoji:'⚪',label:'Perla mágica',x:45,y:65,w:5,h:5,layer:'front',accion:'recoger',efecto:'✨',sonido:[880,1046,1175]}, {id:'burbuja_sub',emoji:'🫧',label:'Burbujas marinas',x:88,y:38,w:6,h:10,layer:'front'} ] },
+  { id:27, nombre:'Puerta de las Estrellas', emoji:'🌟', bg:'linear-gradient(180deg,#000000 0%,#000020 50%,#000040 100%)', accent:'#FFD700', floor:'#00002a',
+    objetos:[ {id:'puerta_est',emoji:'🚪',label:'Puerta mágica',x:38,y:25,w:22,h:45,layer:'back',accion:'abrir',efecto:'✨',sonido:[523,659,784,1046,784,659,523]}, {id:'estrellas_grandes',emoji:'⭐',label:'Estrellas gigantes',x:10,y:15,w:12,h:12,layer:'back'}, {id:'estrellas_med',emoji:'🌟',label:'Estrellas medianas',x:75,y:20,w:10,h:10,layer:'back'}, {id:'via_lactea',emoji:'🌌',label:'Vía Láctea',x:20,y:30,w:20,h:12,layer:'back'}, {id:'galaxia_final',emoji:'🌌',label:'Galaxia lejana',x:60,y:28,w:18,h:10,layer:'back'}, {id:'cohete_final',emoji:'🚀',label:'Nave estelar',x:10,y:50,w:12,h:14,layer:'front',accion:'subir',efecto:'🚀',sonido:[200,400,600,800,1000]}, {id:'astronauta_final',emoji:'👨‍🚀',label:'Astronauta explorador',x:25,y:52,w:10,h:14,layer:'front',accion:'seguir',efecto:'🚀',sonido:[400,600,800]}, {id:'alien_amigo',emoji:'👽',label:'Amigo alienígena',x:65,y:50,w:9,h:12,layer:'front',accion:'saludar',efecto:'👋',sonido:[600,700,800,700]}, {id:'unicornio_final',emoji:'🦄',label:'Unicornio galáctico',x:78,y:45,w:14,h:18,layer:'front',accion:'montar',efecto:'✨',sonido:[523,659,784,1046,784,659,523]}, {id:'mariposa_final',emoji:'🦋',label:'Mariposa del cosmos',x:45,y:42,w:8,h:8,layer:'front'}, {id:'flor_estelar',emoji:'🌸',label:'Flor del universo',x:5,y:62,w:8,h:10,layer:'front'}, {id:'luna_final',emoji:'🌕',label:'Luna llena final',x:50,y:10,w:12,h:12,layer:'back'}, {id:'cometa_final',emoji:'☄️',label:'Cometa eterno',x:30,y:10,w:10,h:6,layer:'back'}, {id:'arcoiris_final',emoji:'🌈',label:'Arco iris cósmico',x:15,y:40,w:18,h:10,layer:'back'}, {id:'sol_final',emoji:'☀️',label:'Sol eterno',x:80,y:8,w:12,h:12,layer:'back'}, {id:'pajarito_final',emoji:'🕊️',label:'Paloma de la paz',x:42,y:65,w:6,h:7,layer:'front',accion:'seguir',efecto:'✨',sonido:[800,900,1000,900,800]} ] },
 ];
 
-const r  = (a: number, b: number) => a + Math.random() * (b - a);
-const ri = (a: number, b: number) => Math.floor(r(a, b));
-let uid = 5000;
+const TODOS_AMBIENTES = [...AMBIENTES, ...AMBIENTES_EXTRA];
 
-export default function Mundo3() {
+/* ══════════════════════════════════════════════
+   🎮 COMPONENTE PRINCIPAL
+══════════════════════════════════════════════ */
+export default function CasaGalactica() {
   const router = useRouter();
-  const worldRef = useRef<HTMLDivElement>(null);
+  const [ambienteIdx, setAmbienteIdx] = useState(0);
+  const [personajes, setPersonajes] = useState<Personaje[]>(PERSONAJES_BASE.map(p => ({ ...p })));
+  const [objPosiciones, setObjPosiciones] = useState<Record<string, { x: number; y: number }>>({});
+  const [dragging, setDragging] = useState<{ tipo: 'objeto' | 'personaje'; id: string } | null>(null);
+  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
+  const [efecto, setEfecto] = useState<{ emoji: string; x: number; y: number } | null>(null);
+  const [bubble, setBubble] = useState<{ id: string; texto: string } | null>(null);
+  const [showGuardarropa, setShowGuardarropa] = useState<string | null>(null);
+  const [layerMode, setLayerMode] = useState<'front' | 'back'>('front');
+  const [showAmbientes, setShowAmbientes] = useState(false);
+  const [needsDecay, setNeedsDecay] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ tipo: 'objeto' | 'personaje'; id: string } | null>(null);
 
-  const [chars, setChars] = useState<Character[]>(() =>
-    INIT_CHARACTERS.map(c => ({ ...c, dragging:false, zIndex:c.id*10, eating:false, sleeping:false, bathing:false, dancing:false, speechBubble:'', bubbleTimer:0 }))
-  );
-  const [furniture, setFurniture] = useState<FurnitureItem[]>(() =>
-    INIT_FURNITURE.map(f => ({ ...f, placed:false, dragging:false, zIndex:f.id }))
-  );
-  const [particles, setParticles] = useState<Particle[]>([]);
-  const [selectedChar, setSelectedChar] = useState<number | null>(null);
-  const [editingChar, setEditingChar] = useState<number | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [hoverRoom, setHoverRoom] = useState<string | null>(null);
-  const [comboMsg, setComboMsg] = useState('');
-  const [showCombo, setShowCombo] = useState(false);
-  const [toqwowPos, setToqwowPos] = useState({ x:44, y:44 });
-  const [toqwowMood, setToqwowMood] = useState('idle');
-  const [draggingTq, setDraggingTq] = useState(false);
-  const [needsTick, setNeedsTick] = useState(0);
+  const ambiente = TODOS_AMBIENTES[ambienteIdx];
 
-  const draggingFurId = useRef<number | null>(null);
-  const draggingCharId = useRef<number | null>(null);
-  const dragOff = useRef({ x:0, y:0 });
-  const maxZ = useRef(300);
-  const tqDragging = useRef(false);
-  const tqOff = useRef({ x:0, y:0 });
-
-  /* ── Needs decay over time (slow) ── */
+  /* Decaer necesidades cada 15s */
   useEffect(() => {
-    const iv = setInterval(() => {
-      setChars(prev => prev.map(c => {
-        if (c.sleeping || c.eating || c.bathing) return c;
-        const n = { ...c.needs };
-        n.hunger = Math.max(0, n.hunger - 0.8);
-        n.sleep  = Math.max(0, n.sleep  - 0.6);
-        n.fun    = Math.max(0, n.fun    - 0.5);
-        n.bath   = Math.max(0, n.bath   - 0.4);
-        n.love   = Math.max(0, n.love   - 0.3);
-        // Derive mood from lowest need
-        const lowest = Object.entries(n).sort((a,b)=>a[1]-b[1])[0];
-        let mood: Mood = c.mood;
-        if (lowest[1] < 25) {
-          if (lowest[0]==='hunger') mood='hungry';
-          else if (lowest[0]==='sleep') mood='sleepy';
-          else if (lowest[0]==='fun') mood='sad';
-          else if (lowest[0]==='bath') mood='sad';
-          else if (lowest[0]==='love') mood='sad';
-        } else if (Math.min(...Object.values(n)) > 70) mood='happy';
-        return { ...c, needs:n, mood };
-      }));
-      setNeedsTick(t => t+1);
-    }, 3000);
-    return () => clearInterval(iv);
+    const t = setInterval(() => {
+      setPersonajes(prev => prev.map(p => ({
+        ...p,
+        hambre: Math.max(0, p.hambre - 3),
+        sueno: Math.max(0, p.sueno - 2),
+        diversion: Math.max(0, p.diversion - 2),
+        bano: Math.max(0, p.bano - 2),
+        amor: Math.max(0, p.amor - 2),
+        humor: (p.hambre < 30 || p.sueno < 30 || p.bano < 30) ? 'triste' :
+               (p.hambre > 70 && p.sueno > 70 && p.diversion > 70) ? 'feliz' : 'normal'
+      })));
+      setNeedsDecay(d => d + 1);
+    }, 15000);
+    return () => clearInterval(t);
   }, []);
 
-  /* ── Particles ── */
-  const addParticles = useCallback((x: number, y: number, emoji: string, count=6) => {
-    const np: Particle[] = Array.from({length:count}, () => ({
-      id:uid++, x:x+r(-30,30), y:y+r(-20,10), emoji, vy:r(-2,-4),
+  /* Trigger de objeto sobre personaje */
+  const checkColision = useCallback((objId: string, px: number, py: number) => {
+    const ambiente = TODOS_AMBIENTES[ambienteIdx];
+    const obj = ambiente.objetos.find(o => o.id === objId);
+    if (!obj || !obj.accion) return;
+    const pos = objPosiciones[objId] || { x: obj.x, y: obj.y };
+    personajes.forEach(per => {
+      const dx = Math.abs(pos.x - per.x);
+      const dy = Math.abs(pos.y - per.y);
+      if (dx < 15 && dy < 20) {
+        aplicarEfecto(per.id, obj.accion!, obj.efecto || '✨', obj.sonido);
+      }
+    });
+  }, [personajes, objPosiciones, ambienteIdx]);
+
+  const aplicarEfecto = (perId: string, accion: string, emoji: string, sonido?: number[]) => {
+    if (sonido) melody(sonido, 80, 0.3, 0.15);
+    vib([50, 20, 50]);
+    setPersonajes(prev => prev.map(p => {
+      if (p.id !== perId) return p;
+      const np = { ...p };
+      if (accion === 'comer' || accion === 'beber') { np.hambre = Math.min(100, p.hambre + 25); np.humor = 'feliz'; }
+      if (accion === 'dormir' || accion === 'recostarse') { np.sueno = Math.min(100, p.sueno + 30); np.humor = 'feliz'; }
+      if (accion === 'jugar' || accion === 'columpiarse' || accion === 'bajar') { np.diversion = Math.min(100, p.diversion + 25); np.humor = 'emocionado'; }
+      if (accion === 'bañar' || accion === 'duchar' || accion === 'lavar') { np.bano = Math.min(100, p.bano + 30); np.humor = 'feliz'; }
+      if (accion === 'abrazar' || accion === 'acariciar') { np.amor = Math.min(100, p.amor + 25); np.humor = 'emocionado'; }
+      return np;
     }));
-    setParticles(p => [...p,...np]);
-    setTimeout(() => setParticles(p => p.filter(pp => !np.find(n=>n.id===pp.id))), 1000);
-  }, []);
-
-  /* ── Speech bubble ── */
-  const speak = useCallback((charId: number, text: string) => {
-    setChars(prev => prev.map(c => c.id===charId ? {...c, speechBubble:text, bubbleTimer:2500} : c));
-    setTimeout(() => setChars(prev => prev.map(c => c.id===charId ? {...c, speechBubble:''} : c)), 2500);
-  }, []);
-
-  /* ── Combo message ── */
-  const showComboMsg = useCallback((msg: string, snd:()=>void) => {
-    setComboMsg(msg); setShowCombo(true); snd(); vib([60,30,60]);
-    setToqwowMood('dance'); setTimeout(()=>{ setToqwowMood('idle'); setShowCombo(false); }, 2800);
-  }, []);
-
-  /* ── Trigger action when furniture dropped on character ── */
-  const triggerCharAction = useCallback((charId: number, action: Need|'fun'|'deco', furEmoji: string, dropX:number, dropY:number) => {
-    const resp = action==='hunger' ? ACTION_RESPONSES.eat
-                : action==='sleep'  ? ACTION_RESPONSES.sleep
-                : action==='bath'   ? ACTION_RESPONSES.bath
-                : action==='love'   ? ACTION_RESPONSES.hug
-                :                     ACTION_RESPONSES.play;
-    const speech = resp.speech[ri(0,resp.speech.length)];
-    speak(charId, speech);
-    resp.sound();
-    vib([30,15,30]);
-    addParticles(dropX, dropY, resp.particle, 8);
-
-    setChars(prev => prev.map(c => {
-      if (c.id!==charId) return c;
-      const n = { ...c.needs };
-      if (action==='hunger') { n.hunger=Math.min(100,n.hunger+40); }
-      if (action==='sleep')  { n.sleep =Math.min(100,n.sleep +40); }
-      if (action==='bath')   { n.bath  =Math.min(100,n.bath  +40); }
-      if (action==='love')   { n.love  =Math.min(100,n.love  +30); }
-      if (action==='fun')    { n.fun   =Math.min(100,n.fun   +35); }
-
-      const allHigh = Object.values(n).every(v=>v>70);
-      const mood: Mood = allHigh ? 'happy'
-        : action==='hunger' ? 'happy'
-        : action==='sleep'  ? 'sleepy'
-        : action==='bath'   ? 'clean'
-        : action==='love'   ? 'loved'
-        : 'excited';
-
-      return {
-        ...c, needs:n, mood,
-        eating:  action==='hunger',
-        sleeping:action==='sleep',
-        bathing: action==='bath',
-        dancing: action==='fun',
-      };
-    }));
-
-    // Stop animations after 2s
-    setTimeout(() => setChars(prev => prev.map(c => c.id===charId ? {...c,eating:false,sleeping:false,bathing:false,dancing:false} : c)), 2200);
-
-    if (action==='hunger' && furEmoji==='🎂') showComboMsg('🎂🎉 ¡Fiesta de cumpleaños!', ()=>melody([523,523,659,523,784,740,784],100));
-    if (action==='fun'    && furEmoji==='⚽') showComboMsg('⚽🏆 ¡Gooool!', ()=>melody([523,659,784,1047,1319]));
-    if (action==='bath'   && furEmoji==='🛁') showComboMsg('🛁✨ ¡Súper limpio!', ()=>melody([660,784,1047,1319]));
-    if (action==='love'   && furEmoji==='❤️') showComboMsg('❤️🦄 ¡Amor infinito!', ()=>melody([784,1047,1319,1568,2093]));
-  }, [speak, addParticles, showComboMsg]);
-
-  /* ══ FURNITURE DRAG ══ */
-  const onFurnDown = useCallback((e: React.PointerEvent, id: number) => {
-    e.stopPropagation();
-    (e.target as Element).setPointerCapture(e.pointerId);
-    draggingFurId.current = id; maxZ.current++;
-    const wr = worldRef.current!.getBoundingClientRect();
-    const f = furniture.find(f=>f.id===id)!;
-    dragOff.current = { x:e.clientX-wr.left-(f.x/100)*wr.width, y:e.clientY-wr.top-(f.y/100)*wr.height };
-    setFurniture(prev=>prev.map(f=>f.id===id?{...f,dragging:true,zIndex:maxZ.current,placed:false}:f));
-    setIsDragging(true);
-    note(ri(400,700),0.1,0.12); vib(12);
-  }, [furniture]);
-
-  const onFurnMove = useCallback((e: React.PointerEvent, id: number) => {
-    if (draggingFurId.current!==id) return;
-    const wr = worldRef.current!.getBoundingClientRect();
-    const nx = ((e.clientX-wr.left-dragOff.current.x)/wr.width)*100;
-    const ny = ((e.clientY-wr.top-dragOff.current.y)/wr.height)*100;
-    setFurniture(prev=>prev.map(f=>f.id===id?{...f,x:Math.max(0,Math.min(93,nx)),y:Math.max(0,Math.min(90,ny))}:f));
-    const px=e.clientX-wr.left, py=e.clientY-wr.top;
-    const rm=ROOMS.find(rm=>px>(rm.x/100)*wr.width&&px<((rm.x+rm.w)/100)*wr.width&&py>(rm.y/100)*wr.height&&py<((rm.y+rm.h)/100)*wr.height);
-    setHoverRoom(rm?.id||null);
-  }, []);
-
-  const onFurnUp = useCallback((e: React.PointerEvent, id: number) => {
-    if (draggingFurId.current!==id) return;
-    draggingFurId.current=null; setIsDragging(false); setHoverRoom(null);
-    const wr = worldRef.current!.getBoundingClientRect();
-    const px=e.clientX-wr.left, py=e.clientY-wr.top;
-    const furn = furniture.find(f=>f.id===id)!;
-
-    // Check if dropped ON a character
-    const hitChar = chars.find(c => {
-      const cx=(c.x/100)*wr.width+(c.sz/2), cy=(c.y/100)*wr.height+(c.sz/2);
-      return Math.sqrt((px-cx)**2+(py-cy)**2) < c.sz*0.7;
-    });
-
-    if (hitChar) {
-      triggerCharAction(hitChar.id, furn.action, furn.emoji, px, py);
-      setFurniture(prev=>prev.map(f=>f.id===id?{...f,dragging:false}:f));
-      note(ri(600,900),0.2,0.22); vib([25,12,25]);
-    } else {
-      // Check room placement
-      const rm=ROOMS.find(rm=>px>(rm.x/100)*wr.width&&px<((rm.x+rm.w)/100)*wr.width&&py>(rm.y/100)*wr.height&&py<((rm.y+rm.h)/100)*wr.height);
-      setFurniture(prev=>prev.map(f=>f.id===id?{...f,dragging:false,placed:!!rm}:f));
-      if (rm) { note(ri(500,800),0.2,0.18); addParticles(px,py,'✨',5); }
-      else note(ri(300,500),0.12,0.1);
-    }
-  }, [furniture, chars, triggerCharAction, addParticles]);
-
-  /* ══ CHARACTER DRAG ══ */
-  const onCharDown = useCallback((e: React.PointerEvent, id: number) => {
-    e.stopPropagation();
-    (e.target as Element).setPointerCapture(e.pointerId);
-    draggingCharId.current=id; maxZ.current++;
-    const wr=worldRef.current!.getBoundingClientRect();
-    const c=chars.find(c=>c.id===id)!;
-    dragOff.current={x:e.clientX-wr.left-(c.x/100)*wr.width, y:e.clientY-wr.top-(c.y/100)*wr.height};
-    setChars(prev=>prev.map(c=>c.id===id?{...c,dragging:true,zIndex:maxZ.current}:c));
-    setSelectedChar(id);
-    note(ri(400,700),0.12,0.15); vib(15);
-  }, [chars]);
-
-  const onCharMove = useCallback((e: React.PointerEvent, id: number) => {
-    if (draggingCharId.current!==id) return;
-    const wr=worldRef.current!.getBoundingClientRect();
-    const nx=((e.clientX-wr.left-dragOff.current.x)/wr.width)*100;
-    const ny=((e.clientY-wr.top-dragOff.current.y)/wr.height)*100;
-    setChars(prev=>prev.map(c=>c.id===id?{...c,x:Math.max(0,Math.min(90,nx)),y:Math.max(8,Math.min(85,ny))}:c));
-  }, []);
-
-  const onCharUp = useCallback((e: React.PointerEvent, id: number) => {
-    if (draggingCharId.current!==id) return;
-    draggingCharId.current=null;
-    const wr=worldRef.current!.getBoundingClientRect();
-    const px=e.clientX-wr.left, py=e.clientY-wr.top;
-
-    // Check if character dropped ON placed furniture
-    const hitFurn=furniture.find(f=>{
-      if (!f.placed && !['front','back'].includes(f.layer)) return false;
-      const fx=(f.x/100)*wr.width+(f.sz/2), fy=(f.y/100)*wr.height+(f.sz/2);
-      return Math.sqrt((px-fx)**2+(py-fy)**2)<f.sz*0.75;
-    });
-
-    if (hitFurn) triggerCharAction(id, hitFurn.action, hitFurn.emoji, px, py);
-
-    // Check if char dropped on another char → hug
-    const hitOtherChar=chars.find(c=>{
-      if (c.id===id) return false;
-      const cx=(c.x/100)*wr.width+(c.sz/2), cy=(c.y/100)*wr.height+(c.sz/2);
-      return Math.sqrt((px-cx)**2+(py-cy)**2)<c.sz*0.8;
-    });
-    if (hitOtherChar) {
-      speak(id,'¡Abrazoooo! 💕');
-      speak(hitOtherChar.id,'¡Eres mi amigo! 🥰');
-      addParticles(px,py,'❤️',10);
-      melody([523,659,784,1047,1319]);
-      vib([30,15,30,15,60]);
-      setChars(prev=>prev.map(c=>(c.id===id||c.id===hitOtherChar.id)?{...c,mood:'loved',needs:{...c.needs,love:Math.min(100,c.needs.love+30)}}:c));
-    }
-
-    setChars(prev=>prev.map(c=>c.id===id?{...c,dragging:false}:c));
-    addParticles(px,py,'✨',3);
-    note(ri(400,700),0.15,0.15); vib(12);
-  }, [chars, furniture, triggerCharAction, speak, addParticles]);
-
-  /* ══ TOQWOW ══ */
-  const onTqDown=(e:React.PointerEvent)=>{e.stopPropagation();(e.target as Element).setPointerCapture(e.pointerId);tqDragging.current=true;setDraggingTq(true);const wr=worldRef.current!.getBoundingClientRect();tqOff.current={x:e.clientX-wr.left-(toqwowPos.x/100)*wr.width,y:e.clientY-wr.top-(toqwowPos.y/100)*wr.height};melody([523,659,784]);vib(18);};
-  const onTqMove=(e:React.PointerEvent)=>{if(!tqDragging.current)return;const wr=worldRef.current!.getBoundingClientRect();setToqwowPos({x:Math.max(2,Math.min(84,((e.clientX-wr.left-tqOff.current.x)/wr.width)*100)),y:Math.max(8,Math.min(82,((e.clientY-wr.top-tqOff.current.y)/wr.height)*100))});setToqwowMood('dance');};
-  const onTqUp=()=>{tqDragging.current=false;setDraggingTq(false);setToqwowMood('happy');setTimeout(()=>setToqwowMood('idle'),1500);melody([784,1047,1319]);vib([25,12,25]);};
-
-  /* ══ OUTFIT EDITOR ══ */
-  const updateOutfit = (charId: number, part: keyof Outfit, val: string) => {
-    setChars(prev=>prev.map(c=>c.id===charId?{...c,outfit:{...c.outfit,[part]:val}}:c));
-    note(ri(600,1000),0.15,0.15); vib(10);
+    setBubble({ id: perId, texto: emoji });
+    const per = personajes.find(p => p.id === perId);
+    if (per) setEfecto({ emoji, x: per.x, y: per.y - 10 });
+    setTimeout(() => setBubble(null), 1800);
+    setTimeout(() => setEfecto(null), 1500);
   };
 
-  const tqAnims:Record<string,string>={idle:'tqFloat 3.5s ease-in-out infinite',happy:'tqHappy .4s ease-in-out 3',dance:'tqDance .35s ease-in-out infinite alternate'};
+  /* Drag handlers */
+  const startDrag = (tipo: 'objeto' | 'personaje', id: string, e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { tipo, id };
+    setDragging({ tipo, id });
+    const point = 'touches' in e ? e.touches[0] : e;
+    setDragPos({ x: point.clientX, y: point.clientY });
+    melody([523, 659], 60, 0.15, 0.1);
+  };
+
+  const onMove = useCallback((e: TouchEvent | MouseEvent) => {
+    if (!dragRef.current || !containerRef.current) return;
+    const point = 'touches' in e ? e.touches[0] : e;
+    const rect = containerRef.current.getBoundingClientRect();
+    const xPct = Math.max(0, Math.min(95, ((point.clientX - rect.left) / rect.width) * 100));
+    const yPct = Math.max(20, Math.min(85, ((point.clientY - rect.top) / rect.height) * 100));
+    setDragPos({ x: point.clientX, y: point.clientY });
+    const { tipo, id } = dragRef.current;
+    if (tipo === 'objeto') {
+      setObjPosiciones(prev => ({ ...prev, [id]: { x: xPct, y: yPct } }));
+    } else {
+      setPersonajes(prev => prev.map(p => p.id === id ? { ...p, x: xPct, y: yPct } : p));
+    }
+  }, []);
+
+  const endDrag = useCallback(() => {
+    if (!dragRef.current) return;
+    const { tipo, id } = dragRef.current;
+    if (tipo === 'objeto') checkColision(id, 0, 0);
+    dragRef.current = null;
+    setDragging(null);
+    note(784, 0.2, 0.15);
+  }, [checkColision]);
+
+  useEffect(() => {
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchend', endDrag);
+    window.addEventListener('mouseup', endDrag);
+    return () => {
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchend', endDrag);
+      window.removeEventListener('mouseup', endDrag);
+    };
+  }, [onMove, endDrag]);
+
+  const cambiarAmbiente = (idx: number) => {
+    setAmbienteIdx(idx);
+    setShowAmbientes(false);
+    setObjPosiciones({});
+    melody([523, 659, 784, 1046], 80, 0.25, 0.15);
+  };
+
+  const humorEmoji = (h: string) => h === 'feliz' ? '😊' : h === 'triste' ? '😢' : h === 'emocionado' ? '🤩' : '😐';
+  const barColor = (v: number) => v > 60 ? '#7CFC00' : v > 30 ? '#FFD700' : '#FF4444';
+
+  /* Renderizar objetos según capa */
+  const renderObjetos = (capa: 'back' | 'front') =>
+    ambiente.objetos
+      .filter(o => (o.layer || 'front') === capa)
+      .map(obj => {
+        const pos = objPosiciones[obj.id] || { x: obj.x, y: obj.y };
+        const isDragging = dragging?.tipo === 'objeto' && dragging.id === obj.id;
+        return (
+          <div
+            key={obj.id}
+            onTouchStart={e => startDrag('objeto', obj.id, e)}
+            onMouseDown={e => startDrag('objeto', obj.id, e)}
+            onTouchEnd={() => { if (!dragRef.current) { if (obj.sonido) melody(obj.sonido, 80, 0.25, 0.15); vib(30); }}}
+            title={obj.label}
+            style={{
+              position: 'absolute',
+              left: `${pos.x}%`, top: `${pos.y}%`,
+              width: `${obj.w}%`, height: `${obj.h}%`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: `${Math.min(obj.w, obj.h) * 0.5}vw`,
+              cursor: 'grab',
+              userSelect: 'none',
+              touchAction: 'none',
+              zIndex: isDragging ? 100 : (capa === 'back' ? 1 : 5),
+              filter: isDragging ? 'brightness(1.3) drop-shadow(0 0 8px gold)' : undefined,
+              transition: isDragging ? 'none' : 'filter 0.2s',
+            }}
+          >
+            {obj.emoji}
+          </div>
+        );
+      });
 
   return (
-    <div ref={worldRef}
-      style={{width:'100vw',height:'100vh',overflow:'hidden',position:'relative',touchAction:'none',fontFamily:'system-ui,sans-serif',
-        background:'linear-gradient(135deg,#0a0520 0%,#1a0a40 35%,#0a1a3a 65%,#050d1a 100%)'}}>
+    <div style={{ width: '100%', height: '100vh', background: '#000', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
 
-      {/* BG sparkles */}
-      {Array.from({length:55}).map((_,i)=>(
-        <div key={i} style={{position:'absolute',borderRadius:'50%',pointerEvents:'none',
-          width:`${r(1,3)}px`,height:`${r(1,3)}px`,
-          background:['#B8A9FF','#FFD700','#FF6B9D','#00D4C8','white'][i%5],
-          opacity:r(.1,.7),top:`${r(0,92)}%`,left:`${r(0,100)}%`,
-          animation:`tw${i%3} ${r(2,5)}s ${r(0,4)}s infinite`}}/>
-      ))}
+      {/* HEADER */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(0,0,0,0.7)', zIndex: 200, flexShrink: 0 }}>
+        <button onClick={() => router.push('/')} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, color: '#fff', padding: '4px 12px', fontSize: 13, cursor: 'pointer' }}>← Inicio</button>
+        <button onClick={() => setShowAmbientes(true)} style={{ background: ambiente.accent + '33', border: `1px solid ${ambiente.accent}`, borderRadius: 20, color: '#fff', padding: '4px 14px', fontSize: 13, cursor: 'pointer', flex: 1, textAlign: 'center' }}>
+          {ambiente.emoji} {ambiente.nombre}
+        </button>
+        <span style={{ color: '#aaa', fontSize: 11 }}>{ambienteIdx + 1}/{TODOS_AMBIENTES.length}</span>
+      </div>
 
-      {/* ROOMS */}
-      {ROOMS.map(rm=>(
-        <div key={rm.id} style={{position:'absolute',left:`${rm.x}%`,top:`${rm.y}%`,width:`${rm.w}%`,height:`${rm.h}%`,
-          borderRadius:20,border:`2px solid ${hoverRoom===rm.id?'rgba(255,255,255,.75)':rm.bdr}`,
-          background:hoverRoom===rm.id?rm.bg.replace('.1','.22').replace('.08','.18'):rm.bg,
-          transition:'all .2s',pointerEvents:'none',zIndex:2}}>
-          <div style={{position:'absolute',top:8,left:12,fontSize:13,fontWeight:700,color:'rgba(255,255,255,.5)',letterSpacing:1}}>{rm.label}</div>
-        </div>
-      ))}
+      {/* ESCENA PRINCIPAL */}
+      <div ref={containerRef} style={{ flex: 1, position: 'relative', overflow: 'hidden', background: ambiente.bg, touchAction: 'none' }}>
 
-      {/* BACK LAYER furniture */}
-      {furniture.filter(f=>f.layer==='back'&&!f.dragging).map(f=>(
-        <div key={f.id} onPointerDown={e=>onFurnDown(e,f.id)} onPointerMove={e=>onFurnMove(e,f.id)} onPointerUp={e=>onFurnUp(e,f.id)}
-          style={{position:'absolute',left:`${f.x}%`,top:`${f.y}%`,fontSize:f.sz,lineHeight:1,touchAction:'none',userSelect:'none',
-            zIndex:f.placed?f.zIndex+1:f.zIndex,cursor:'grab',
-            filter:f.placed?`drop-shadow(0 0 10px ${f.color})`:`drop-shadow(0 2px 6px ${f.color}55)`,
-            animation:`fF${f.id%4} ${3.5+f.id*.15}s ease-in-out infinite`,transition:'filter .2s'}}
-          title={f.label}>{f.emoji}</div>
-      ))}
+        {/* Piso */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '18%', background: ambiente.floor, borderRadius: '60% 60% 0 0 / 30% 30% 0 0', opacity: 0.5 }} />
 
-      {/* CHARACTERS */}
-      {chars.map(c=>(
-        <div key={c.id} style={{position:'absolute',left:`${c.x}%`,top:`${c.y}%`,zIndex:c.dragging?200:c.zIndex,touchAction:'none',userSelect:'none',cursor:c.dragging?'grabbing':'grab'}}>
-          {/* Speech bubble */}
-          {c.speechBubble&&(
-            <div style={{position:'absolute',bottom:'105%',left:'50%',transform:'translateX(-50%)',
-              background:'white',color:'#333',borderRadius:16,padding:'6px 14px',fontSize:13,fontWeight:700,
-              whiteSpace:'nowrap',boxShadow:'0 4px 20px rgba(0,0,0,.25)',zIndex:300,
-              animation:'bubbleIn .3s ease-out'}}>
-              {c.speechBubble}
-              <div style={{position:'absolute',bottom:-8,left:'50%',transform:'translateX(-50%)',
-                width:0,height:0,borderLeft:'8px solid transparent',borderRight:'8px solid transparent',borderTop:'8px solid white'}}/>
+        {/* Objetos capa back */}
+        {renderObjetos('back')}
+
+        {/* PERSONAJES */}
+        {personajes.map(per => {
+          const isDrag = dragging?.tipo === 'personaje' && dragging.id === per.id;
+          const perBubble = bubble?.id === per.id;
+          return (
+            <div key={per.id}
+              onTouchStart={e => startDrag('personaje', per.id, e)}
+              onMouseDown={e => startDrag('personaje', per.id, e)}
+              onTouchEnd={() => setShowGuardarropa(per.id)}
+              onClick={() => { note(523, 0.3, 0.15); setBubble({ id: per.id, texto: humorEmoji(per.humor) }); setTimeout(() => setBubble(null), 1500); }}
+              style={{
+                position: 'absolute', left: `${per.x}%`, top: `${per.y}%`,
+                width: '10%', height: '18%',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end',
+                cursor: 'pointer', touchAction: 'none', zIndex: isDrag ? 50 : 10,
+                filter: isDrag ? 'drop-shadow(0 0 10px white)' : undefined,
+                transition: isDrag ? 'none' : 'filter 0.2s',
+              }}>
+              {/* Burbuja de diálogo */}
+              {perBubble && (
+                <div style={{
+                  position: 'absolute', top: '-25%', left: '50%', transform: 'translateX(-50%)',
+                  background: 'white', borderRadius: 12, padding: '3px 8px',
+                  fontSize: '1.4rem', boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                  whiteSpace: 'nowrap', zIndex: 60,
+                }}>
+                  {bubble.texto}
+                  <div style={{ position: 'absolute', bottom: -8, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '8px solid white' }} />
+                </div>
+              )}
+              {/* Barras de necesidades al hover */}
+              <div style={{ position: 'absolute', top: '-60%', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.7)', borderRadius: 8, padding: '3px 6px', display: 'flex', flexDirection: 'column', gap: 2, minWidth: 60, opacity: isDrag ? 1 : 0.85 }}>
+                {[
+                  { label: '🍕', val: per.hambre },
+                  { label: '💤', val: per.sueno },
+                  { label: '🎮', val: per.diversion },
+                  { label: '🛁', val: per.bano },
+                  { label: '💕', val: per.amor },
+                ].map(n => (
+                  <div key={n.label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span style={{ fontSize: '0.55rem' }}>{n.label}</span>
+                    <div style={{ width: 30, height: 3, background: '#333', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ width: `${n.val}%`, height: '100%', background: barColor(n.val), transition: 'width 0.5s' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Personaje */}
+              <div style={{ fontSize: '2.5rem', lineHeight: 1 }}>{per.emoji}</div>
+              <div style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.9)', textAlign: 'center', fontWeight: 700, textShadow: '0 1px 3px #000' }}>{per.nombre}</div>
             </div>
-          )}
+          );
+        })}
 
-          {/* Mood indicator */}
-          <div style={{position:'absolute',top:-22,left:'50%',transform:'translateX(-50%)',
-            fontSize:20,animation:'moodFloat 2s ease-in-out infinite',pointerEvents:'none'}}>
-            {MOODS_EMOJI[c.mood]}
+        {/* Objetos capa front */}
+        {renderObjetos('front')}
+
+        {/* Efecto visual */}
+        {efecto && (
+          <div style={{
+            position: 'absolute', left: `${efecto.x}%`, top: `${efecto.y}%`,
+            fontSize: '2rem', pointerEvents: 'none', zIndex: 200,
+            animation: 'floatUp 1.5s ease-out forwards',
+          }}>
+            {efecto.emoji}
           </div>
+        )}
+      </div>
 
-          {/* Character body */}
-          <div
-            onPointerDown={e=>onCharDown(e,c.id)}
-            onPointerMove={e=>onCharMove(e,c.id)}
-            onPointerUp={e=>onCharUp(e,c.id)}
-            onClick={()=>setEditingChar(c.id===editingChar?null:c.id)}
-            style={{fontSize:c.sz,lineHeight:1,
-              filter:`drop-shadow(0 4px 12px ${MOOD_COLORS[c.mood]}88)`,
-              transform:`scale(${c.dragging?1.18:1})`,transition:'transform .18s',
-              animation: c.eating   ? 'charEat .4s ease-in-out infinite alternate'
-                        : c.sleeping ? 'charSleep 1.5s ease-in-out infinite'
-                        : c.bathing  ? 'charBath .6s ease-in-out infinite'
-                        : c.dancing  ? 'charDance .4s ease-in-out infinite alternate'
-                        : c.dragging ? 'none'
-                        : `charIdle${c.id%3} ${2.5+c.id*.3}s ease-in-out infinite`}}>
-            {c.baseEmoji}
+      {/* PANEL DE AMBIENTES */}
+      {showAmbientes && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 500, overflow: 'auto', padding: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ color: '#fff', fontSize: 16, fontWeight: 700 }}>🏠 28 Ambientes</span>
+            <button onClick={() => setShowAmbientes(false)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, color: '#fff', padding: '4px 12px', cursor: 'pointer' }}>✕</button>
           </div>
-
-          {/* Outfit accessories */}
-          <div style={{position:'absolute',top:-10,left:'50%',transform:'translateX(-50%)',fontSize:20,pointerEvents:'none'}}>
-            {c.outfit.acc}
-          </div>
-
-          {/* Name tag */}
-          <div style={{textAlign:'center',fontSize:11,color:'rgba(255,255,255,.7)',fontWeight:700,marginTop:2,pointerEvents:'none'}}>{c.name}</div>
-
-          {/* Needs bar (tiny) */}
-          <div style={{display:'flex',gap:2,marginTop:3,justifyContent:'center',pointerEvents:'none'}}>
-            {(Object.entries(c.needs) as [Need,number][]).map(([need,val])=>(
-              <div key={need} style={{width:6,height:6,borderRadius:'50%',
-                background:val>60?'#7CFC00':val>30?'#FFD700':'#FF4444',
-                opacity:.9}} title={`${need}: ${Math.round(val)}`}/>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            {TODOS_AMBIENTES.map((a, i) => (
+              <button key={a.id} onClick={() => cambiarAmbiente(i)}
+                style={{ background: i === ambienteIdx ? a.accent + '55' : 'rgba(255,255,255,0.08)', border: `1px solid ${i === ambienteIdx ? a.accent : 'rgba(255,255,255,0.15)'}`, borderRadius: 10, color: '#fff', padding: '8px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: '1.4rem' }}>{a.emoji}</span>
+                <span style={{ fontSize: '0.55rem', opacity: 0.85, textAlign: 'center', lineHeight: 1.2 }}>{a.nombre}</span>
+              </button>
             ))}
           </div>
         </div>
-      ))}
-
-      {/* FRONT LAYER furniture + dragging */}
-      {furniture.filter(f=>f.layer==='front'||f.dragging).map(f=>(
-        <div key={f.id} onPointerDown={e=>onFurnDown(e,f.id)} onPointerMove={e=>onFurnMove(e,f.id)} onPointerUp={e=>onFurnUp(e,f.id)}
-          style={{position:'absolute',left:`${f.x}%`,top:`${f.y}%`,fontSize:f.sz,lineHeight:1,touchAction:'none',userSelect:'none',
-            zIndex:f.dragging?250:f.placed?f.zIndex+2:f.zIndex,cursor:f.dragging?'grabbing':'grab',
-            transform:`scale(${f.dragging?1.2:1})`,transition:f.dragging?'none':'transform .18s, filter .2s',
-            filter:f.dragging?`drop-shadow(0 14px 32px ${f.color}) drop-shadow(0 0 20px white)`:f.placed?`drop-shadow(0 0 12px ${f.color})`:`drop-shadow(0 2px 8px ${f.color}66)`,
-            animation:f.dragging?'none':`fF${f.id%4} ${3+f.id*.12}s ease-in-out infinite`}}
-          title={f.label}>{f.emoji}</div>
-      ))}
-
-      {/* TOQWOW */}
-      <div onPointerDown={onTqDown} onPointerMove={onTqMove} onPointerUp={onTqUp}
-        style={{position:'absolute',left:`${toqwowPos.x}%`,top:`${toqwowPos.y}%`,
-          width:'min(110px,18vw)',cursor:draggingTq?'grabbing':'grab',zIndex:190,touchAction:'none',
-          filter:`drop-shadow(0 0 ${draggingTq?'30px':'18px'} rgba(184,169,255,.85))`,
-          animation:tqAnims[toqwowMood],transition:'filter .2s'}}>
-        <Image src="/toqwow-mascota.png" alt="Toqwow" width={110} height={140}
-          style={{objectFit:'contain',width:'100%',height:'auto',mixBlendMode:'screen',pointerEvents:'none'}} priority/>
-      </div>
-
-      {/* Particles */}
-      {particles.map(p=>(
-        <div key={p.id} style={{position:'absolute',left:p.x,top:p.y,fontSize:ri(18,28),
-          pointerEvents:'none',zIndex:280,lineHeight:1,animation:'burstP .9s ease-out forwards'}}>{p.emoji}</div>
-      ))}
-
-      {/* Combo */}
-      {showCombo&&(
-        <div style={{position:'absolute',top:'28%',left:'50%',transform:'translateX(-50%)',zIndex:290,
-          background:'rgba(0,0,0,.72)',backdropFilter:'blur(14px)',borderRadius:24,padding:'16px 28px',
-          fontSize:20,fontWeight:800,color:'#FFD700',textAlign:'center',animation:'comboIn .4s ease-out',
-          boxShadow:'0 0 40px rgba(255,200,0,.4)',whiteSpace:'nowrap'}}>{comboMsg}</div>
       )}
 
-      {/* OUTFIT EDITOR PANEL */}
-      {editingChar!==null&&(()=>{
-        const c=chars.find(ch=>ch.id===editingChar)!;
-        if(!c) return null;
-        return(
-          <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:400,
-            background:'rgba(10,5,40,.95)',backdropFilter:'blur(16px)',
-            borderTop:'2px solid rgba(184,169,255,.4)',padding:'12px 14px 16px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-              <div style={{fontSize:15,fontWeight:700,color:'rgba(255,255,255,.85)'}}>
-                ✏️ Personalizar a {c.name}
-              </div>
-              <button onClick={()=>setEditingChar(null)}
-                style={{background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',borderRadius:50,padding:'4px 14px',color:'white',cursor:'pointer',fontSize:13}}>✕</button>
-            </div>
-            <div style={{display:'flex',flexDirection:'column',gap:8}}>
-              {[{label:'💇 Cabello/Cara',opts:HAIR_OPTIONS,part:'hair'},{label:'👕 Ropa',opts:TOP_OPTIONS,part:'top'},{label:'🎩 Accesorio',opts:ACC_OPTIONS,part:'acc'}].map(row=>(
-                <div key={row.part} style={{display:'flex',gap:6,alignItems:'center'}}>
-                  <div style={{fontSize:11,color:'rgba(255,255,255,.5)',minWidth:80,whiteSpace:'nowrap'}}>{row.label}</div>
-                  <div style={{display:'flex',gap:5,overflowX:'auto',flex:1}}>
-                    {row.opts.map(opt=>(
-                      <div key={opt} onClick={()=>updateOutfit(c.id,row.part as keyof Outfit,opt)}
-                        style={{fontSize:28,cursor:'pointer',flexShrink:0,transition:'transform .12s',
-                          transform:c.outfit[row.part as keyof Outfit]===opt?'scale(1.4)':'scale(1)',
-                          filter:c.outfit[row.part as keyof Outfit]===opt?'drop-shadow(0 0 8px gold)':'none'}}>
-                        {opt}
-                      </div>
-                    ))}
-                    <div onClick={()=>updateOutfit(c.id,row.part as keyof Outfit,'')}
-                      style={{fontSize:20,cursor:'pointer',flexShrink:0,opacity:.5,alignSelf:'center'}}>✕</div>
-                  </div>
+      {/* GUARDARROPA */}
+      {showGuardarropa && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 500, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {(() => {
+            const per = personajes.find(p => p.id === showGuardarropa)!;
+            return (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#fff', fontSize: 16, fontWeight: 700 }}>✨ {per.nombre} — Personalizar</span>
+                  <button onClick={() => setShowGuardarropa(null)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 20, color: '#fff', padding: '4px 12px', cursor: 'pointer' }}>✕</button>
                 </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* TOP BAR */}
-      <div style={{position:'absolute',top:0,left:0,right:0,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',zIndex:50,background:'rgba(0,0,0,.4)',backdropFilter:'blur(8px)'}}>
-        <button onClick={()=>router.push('/')} style={{background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.18)',borderRadius:50,padding:'7px 16px',fontSize:13,color:'white',cursor:'pointer'}}>← Inicio</button>
-        <div style={{fontSize:14,fontWeight:700,color:'rgba(255,255,255,.85)'}}>🏠 Casa Galáctica</div>
-        <div style={{fontSize:11,color:'rgba(255,255,255,.4)',textAlign:'right'}}>
-          Tocá {'\n'}los personajes
+                {[
+                  { label: '💇 Cabello', arr: CABELLOS, key: 'cabello' as keyof Personaje },
+                  { label: '👕 Ropa', arr: TOPS, key: 'top' as keyof Personaje },
+                  { label: '🎩 Accesorio', arr: ACCESORIOS, key: 'accesorio' as keyof Personaje },
+                ].map(cat => (
+                  <div key={cat.key}>
+                    <div style={{ color: '#ccc', fontSize: 12, marginBottom: 6 }}>{cat.label}</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {cat.arr.map((e, i) => (
+                        <button key={i} onClick={() => {
+                          setPersonajes(prev => prev.map(p => p.id === per.id ? { ...p, [cat.key]: i } : p));
+                          melody([523, 659], 60, 0.2, 0.12);
+                        }} style={{ background: (per[cat.key] as number) === i ? per.color + '55' : 'rgba(255,255,255,0.08)', border: `2px solid ${(per[cat.key] as number) === i ? per.color : 'transparent'}`, borderRadius: 10, padding: '6px 10px', fontSize: '1.2rem', cursor: 'pointer' }}>
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {/* Necesidades */}
+                <div style={{ color: '#ccc', fontSize: 12 }}>Estado actual:</div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {[{ e: '🍕', l: 'Hambre', v: per.hambre }, { e: '💤', l: 'Sueño', v: per.sueno }, { e: '🎮', l: 'Diversión', v: per.diversion }, { e: '🛁', l: 'Baño', v: per.bano }, { e: '💕', l: 'Amor', v: per.amor }].map(n => (
+                    <div key={n.l} style={{ textAlign: 'center', minWidth: 50 }}>
+                      <div style={{ fontSize: '1.2rem' }}>{n.e}</div>
+                      <div style={{ color: barColor(n.v), fontSize: 11, fontWeight: 700 }}>{n.v}%</div>
+                      <div style={{ color: '#888', fontSize: 9 }}>{n.l}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
         </div>
-      </div>
-
-      {/* HINT */}
-      <div style={{position:'absolute',bottom:editingChar!==null?200:14,left:'50%',transform:'translateX(-50%)',
-        color:'rgba(255,255,255,.35)',fontSize:11,pointerEvents:'none',zIndex:40,whiteSpace:'nowrap',textAlign:'center'}}>
-        🍕 Arrastrá comida a los personajes · 🛁 Baño · 🎮 Diversión · 💕 Toca los personajes para vestirlos
-      </div>
+      )}
 
       <style>{`
-        @keyframes tw0{0%,100%{opacity:.12}50%{opacity:.9}} @keyframes tw1{0%,100%{opacity:.7}50%{opacity:.08}} @keyframes tw2{0%,100%{opacity:.45}50%{opacity:.9}}
-        @keyframes tqFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
-        @keyframes tqHappy{0%{transform:scale(1)}40%{transform:scale(1.2) rotate(10deg)}80%{transform:scale(1.2) rotate(-10deg)}100%{transform:scale(1)}}
-        @keyframes tqDance{0%{transform:rotate(-13deg) scale(1.12)}100%{transform:rotate(13deg) scale(1.12)}}
-        @keyframes charIdle0{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-10px) rotate(2deg)}}
-        @keyframes charIdle1{0%,100%{transform:scale(1)}50%{transform:scale(1.06) rotate(3deg)}}
-        @keyframes charIdle2{0%,100%{transform:translateX(0)}25%{transform:translateX(8px)}75%{transform:translateX(-8px)}}
-        @keyframes charEat{0%{transform:scale(1) rotate(-5deg)}100%{transform:scale(1.15) rotate(5deg)}}
-        @keyframes charSleep{0%,100%{transform:scale(1) rotate(-3deg)}50%{transform:scale(.95) rotate(3deg)}}
-        @keyframes charBath{0%{transform:scale(1) rotate(-8deg)}100%{transform:scale(1.1) rotate(8deg)}}
-        @keyframes charDance{0%{transform:scale(1.1) rotate(-12deg) translateY(0)}100%{transform:scale(1.1) rotate(12deg) translateY(-8px)}}
-        @keyframes fF0{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-        @keyframes fF1{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
-        @keyframes fF2{0%,100%{transform:rotate(0deg)}50%{transform:rotate(5deg)}}
-        @keyframes fF3{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
-        @keyframes moodFloat{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-5px)}}
-        @keyframes bubbleIn{0%{opacity:0;transform:translateX(-50%) scale(.6)}100%{opacity:1;transform:translateX(-50%) scale(1)}}
-        @keyframes burstP{0%{opacity:1;transform:scale(.3) translateY(0)}100%{opacity:0;transform:scale(2) translateY(-80px) rotate(180deg)}}
-        @keyframes comboIn{0%{opacity:0;transform:translateX(-50%) scale(.4)}60%{opacity:1;transform:translateX(-50%) scale(1.1)}100%{transform:translateX(-50%) scale(1)}}
+        @keyframes floatUp {
+          0% { opacity: 1; transform: translateY(0) scale(1); }
+          100% { opacity: 0; transform: translateY(-60px) scale(1.5); }
+        }
       `}</style>
     </div>
   );
