@@ -11,7 +11,7 @@ export default function Home() {
     <div style={{
       width: '100dvw',
       height: '100dvh',
-      background: 'linear-gradient(180deg, #1a1a6e 0%, #2d1b8e 20%, #00b4d8 70%, #00c9b1 100%)',
+      background: 'linear-gradient(180deg, #0d0a4a 0%, #1a1080 25%, #0066aa 60%, #00b8a0 100%)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -20,47 +20,61 @@ export default function Home() {
       position: 'relative',
     }}>
 
-      {/* Estrellitas igual que el logo */}
+      {/* Estrellitas de colores como en el logo */}
       {[
-        [10,5,3],[20,12,2],[35,8,2],[50,4,3],[65,10,2],[78,6,3],[90,14,2],[95,3,2],
-        [5,25,2],[15,40,2],[88,35,2],[93,50,3],[8,60,2],[12,78,2],[85,72,2],[92,85,2],
-        [30,92,2],[50,95,3],[70,90,2],[40,50,2],[60,30,2],[25,65,2],[75,55,2],
-      ].map(([left, top, size], i) => (
+        [10,5,3,'#FFD700'],[20,12,2,'white'],[35,8,2,'#00D4C8'],[50,4,3,'white'],[65,10,2,'#FFB3D1'],
+        [78,6,3,'#FFD700'],[90,14,2,'white'],[95,3,2,'#00D4C8'],[5,25,2,'white'],[15,40,2,'#FFD700'],
+        [88,35,2,'#FFB3D1'],[93,50,3,'white'],[8,60,2,'#FFD700'],[12,78,2,'white'],
+        [85,72,2,'#00D4C8'],[92,85,2,'#FFB3D1'],[30,92,2,'white'],[70,90,2,'#FFD700'],
+        [25,65,2,'#00D4C8'],[75,55,2,'white'],[45,85,3,'#FFB3D1'],[60,20,2,'white'],
+      ].map(([left, top, size, color], i) => (
         <div key={i} style={{
           position: 'absolute',
-          width: size,
-          height: size,
+          width: size as number,
+          height: size as number,
           borderRadius: '50%',
-          background: i % 4 === 0 ? '#FFD700' : i % 4 === 1 ? '#00D4C8' : i % 4 === 2 ? '#FFB3D1' : 'white',
-          opacity: 0.5 + (i % 3) * 0.2,
+          background: color as string,
+          opacity: 0.6 + (i % 3) * 0.15,
           top: `${top}%`,
           left: `${left}%`,
-          boxShadow: size === 3 ? `0 0 4px currentColor` : 'none',
         }} />
       ))}
 
-      {/* Mascota sin fondo rectangular — usa mix-blend-mode para fusionar */}
+      {/* Mascota con overlay radial para fundir bordes */}
       <div style={{
         position: 'relative',
-        width: 360,
-        height: 420,
-        marginBottom: 20,
+        width: 380,
+        height: 440,
+        marginBottom: 24,
       }}>
+        {/* La imagen */}
         <Image
           src="/toqwow-mascota.png"
           alt="ToqWow Koalosauro Estelar"
           fill
           style={{
             objectFit: 'contain',
-            filter: 'drop-shadow(0 0 30px rgba(0,212,200,0.5)) drop-shadow(0 0 60px rgba(124,106,232,0.4))',
+            filter: 'drop-shadow(0 0 24px rgba(0,180,210,0.6)) drop-shadow(0 0 48px rgba(80,60,200,0.4))',
           }}
           priority
         />
+        {/* Overlay que funde las esquinas con el fondo */}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: `
+            radial-gradient(ellipse at top left, #0d0a4a 0%, transparent 35%),
+            radial-gradient(ellipse at top right, #0d0a4a 0%, transparent 35%),
+            radial-gradient(ellipse at bottom left, #00b8a0 0%, transparent 35%),
+            radial-gradient(ellipse at bottom right, #00b8a0 0%, transparent 35%)
+          `,
+          pointerEvents: 'none',
+        }} />
       </div>
 
-      {/* Badge 366 mundos */}
+      {/* Badge */}
       <div style={{
-        background: 'rgba(255,255,255,0.12)',
+        background: 'rgba(255,255,255,0.1)',
         backdropFilter: 'blur(12px)',
         border: '1px solid rgba(255,255,255,0.2)',
         borderRadius: 50,
