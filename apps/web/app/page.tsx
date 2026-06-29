@@ -7,78 +7,81 @@ export default function Home() {
   useEffect(() => { setMounted(true); }, []);
   if (!mounted) return null;
 
-  const stars = [
-    [12,8],[25,22],[38,5],[55,15],[70,8],[82,20],[92,6],
-    [8,45],[18,70],[30,85],[45,92],[60,78],[75,88],[88,65],[95,80],
-    [50,35],[65,50],[80,40],[35,55],[20,40],
-  ];
-
   return (
     <div style={{
       width: '100dvw',
       height: '100dvh',
-      background: 'linear-gradient(160deg, #3B2DB5 0%, #7C6AE8 45%, #00C9C0 100%)',
+      background: 'linear-gradient(180deg, #1a1a6e 0%, #2d1b8e 20%, #00b4d8 70%, #00c9b1 100%)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      color: 'white',
-      fontFamily: 'system-ui, sans-serif',
       overflow: 'hidden',
       position: 'relative',
     }}>
 
-      {stars.map(([left, top], i) => (
+      {/* Estrellitas igual que el logo */}
+      {[
+        [10,5,3],[20,12,2],[35,8,2],[50,4,3],[65,10,2],[78,6,3],[90,14,2],[95,3,2],
+        [5,25,2],[15,40,2],[88,35,2],[93,50,3],[8,60,2],[12,78,2],[85,72,2],[92,85,2],
+        [30,92,2],[50,95,3],[70,90,2],[40,50,2],[60,30,2],[25,65,2],[75,55,2],
+      ].map(([left, top, size], i) => (
         <div key={i} style={{
           position: 'absolute',
-          width: i % 3 === 0 ? 3 : 2,
-          height: i % 3 === 0 ? 3 : 2,
+          width: size,
+          height: size,
           borderRadius: '50%',
-          background: 'white',
-          opacity: 0.3 + (i % 4) * 0.1,
+          background: i % 4 === 0 ? '#FFD700' : i % 4 === 1 ? '#00D4C8' : i % 4 === 2 ? '#FFB3D1' : 'white',
+          opacity: 0.5 + (i % 3) * 0.2,
           top: `${top}%`,
           left: `${left}%`,
+          boxShadow: size === 3 ? `0 0 4px currentColor` : 'none',
         }} />
       ))}
 
-      {/* Logo oficial — mascota + texto + slogan todo en uno */}
+      {/* Mascota sin fondo rectangular — usa mix-blend-mode para fusionar */}
       <div style={{
         position: 'relative',
-        width: 320,
-        height: 400,
-        filter: 'drop-shadow(0 8px 48px rgba(124,106,232,0.8))',
-        marginBottom: 32,
+        width: 360,
+        height: 420,
+        marginBottom: 20,
       }}>
         <Image
           src="/toqwow-mascota.png"
-          alt="ToqWow — Toca, Descubre, Juega"
+          alt="ToqWow Koalosauro Estelar"
           fill
-          style={{ objectFit: 'contain' }}
+          style={{
+            objectFit: 'contain',
+            filter: 'drop-shadow(0 0 30px rgba(0,212,200,0.5)) drop-shadow(0 0 60px rgba(124,106,232,0.4))',
+          }}
           priority
         />
       </div>
 
-      {/* Badge */}
+      {/* Badge 366 mundos */}
       <div style={{
         background: 'rgba(255,255,255,0.12)',
         backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255,255,255,0.25)',
+        border: '1px solid rgba(255,255,255,0.2)',
         borderRadius: 50,
         padding: '12px 28px',
         fontSize: 15,
         fontWeight: 600,
         color: 'rgba(255,255,255,0.95)',
         letterSpacing: 0.5,
+        fontFamily: 'system-ui, sans-serif',
       }}>
         🌍 366 mundos por descubrir
       </div>
 
       <p style={{
         position: 'absolute',
-        bottom: 20,
+        bottom: 18,
         fontSize: 11,
-        opacity: 0.35,
+        opacity: 0.3,
         margin: 0,
+        color: 'white',
+        fontFamily: 'system-ui, sans-serif',
         letterSpacing: 0.5,
       }}>
         © ToqWow · Marca Registrada · Todos los derechos reservados
