@@ -508,7 +508,7 @@ export default function Mundo0() {
               <div style={{ fontSize:11, color:'rgba(255,255,255,.45)' }}>Pincel:</div>
               {BRUSHES.map(b => (
                 <button key={b.id} onClick={() => setBrush(b.id)}
-                  style={{ background:brush===b.id?'rgba(184,169,255,.35)':'rgba(255,255,255,.07)', border:brush===b.id?'2px solid rgba(184,169,255,.8)':'1px solid rgba(255,255,255,.15)', borderRadius:10, padding:'4px 10px', fontSize:13, color:'white', cursor:'pointer', title:b.label }}
+                  style={{ background:brush===b.id?'rgba(184,169,255,.35)':'rgba(255,255,255,.07)', border:brush===b.id?'2px solid rgba(184,169,255,.8)':'1px solid rgba(255,255,255,.15)', borderRadius:10, padding:'4px 10px', fontSize:13, color:'white', cursor:'pointer' }}
                   title={b.label}>{b.icon}</button>
               ))}
               <div style={{ display:'flex', gap:6, alignItems:'center', marginLeft:'auto' }}>
