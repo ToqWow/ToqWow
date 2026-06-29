@@ -1,341 +1,424 @@
 'use client';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
-/* ══════ AUDIO ENGINE ══════ */
+/* ══════ AUDIO ══════ */
 let AC: AudioContext | null = null;
 const ac = () => { if (!AC) AC = new (window.AudioContext || (window as any).webkitAudioContext)(); return AC; };
-const osc = (f: number, d = 0.3, v = 0.25, t: OscillatorType = 'sine', detune = 0) => {
-  try { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.connect(g); g.connect(c.destination); o.type = t; o.frequency.value = f; o.detune.value = detune; g.gain.setValueAtTime(v, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + d); o.start(); o.stop(c.currentTime + d); } catch {}
+const osc = (f: number, d = 0.3, v = 0.22, t: OscillatorType = 'sine') => {
+  try { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.connect(g); g.connect(c.destination); o.type = t; o.frequency.value = f; g.gain.setValueAtTime(v, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + d); o.start(); o.stop(c.currentTime + d); } catch {}
 };
-const sweep = (f1: number, f2: number, d = 0.4, v = 0.25) => {
-  try { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.setValueAtTime(f1, c.currentTime); o.frequency.exponentialRampToValueAtTime(f2, c.currentTime + d); g.gain.setValueAtTime(v, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + d); o.start(); o.stop(c.currentTime + d); } catch {}
-};
-const chord = (fs: number[], gap = 80, d = 0.4, v = 0.2) => fs.forEach((f, i) => setTimeout(() => osc(f, d, v), i * gap));
-const S = {
-  planet: (f: number) => { osc(f, 0.3, 0.25); osc(f * 1.5, 0.2, 0.1, 'sine', 10); },
-  star:   () => sweep(880, 1320, 0.25, 0.2),
-  moon:   () => chord([528, 660, 792, 880], 70, 0.5, 0.2),
-  toqwow: () => chord([523, 659, 784, 1047, 1319, 1568, 2093], 80, 0.7, 0.18),
-  comet:  () => sweep(1200, 200, 0.5, 0.3),
-  black:  () => { osc(40, 1.5, 0.4, 'sawtooth'); setTimeout(() => osc(80, 0.8, 0.2, 'square'), 300); },
-  ufo:    () => { sweep(300, 600, 0.2, 0.2); setTimeout(() => sweep(600, 300, 0.2, 0.2), 220); },
-  rocket: () => osc(660, 0.4, 0.3, 'square'),
-  galaxy: () => chord([262, 330, 392, 523, 659], 90, 0.8, 0.18),
-  alien:  () => { sweep(440, 220, 0.15, 0.2); setTimeout(() => sweep(220, 440, 0.15, 0.2), 160); setTimeout(() => sweep(440, 220, 0.15, 0.2), 320); },
-  nova:   () => chord([880, 660, 440, 220], 50, 0.9, 0.28),
-  meteor: () => osc(150, 0.6, 0.35, 'sawtooth'),
-  sat:    () => osc(370, 0.3, 0.22, 'triangle'),
-  nebula: () => chord([330, 415, 494, 622], 110, 0.6, 0.18),
-  portal: () => { for (let i = 0; i < 5; i++) setTimeout(() => osc(200 + i * 100, 0.3, 0.15), i * 60); },
-  win:    () => { chord([523, 659, 784, 1047, 1319], 100, 0.6, 0.2); setTimeout(() => chord([784, 988, 1175, 1568], 80, 0.8, 0.22), 600); },
-};
+const chord = (fs: number[], gap = 80) => fs.forEach((f, i) => setTimeout(() => osc(f, 0.4, 0.18), i * gap));
+const sweep = (f1: number, f2: number, d = 0.4) => { try { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.setValueAtTime(f1, c.currentTime); o.frequency.exponentialRampToValueAtTime(f2, c.currentTime + d); g.gain.setValueAtTime(0.22, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + d); o.start(); o.stop(c.currentTime + d); } catch {}; };
 const vib = (p: number | number[]) => { try { navigator.vibrate?.(p); } catch {} };
 
-/* ══════ DATOS MUNDO 0 ══════ */
-const PLANETS = [
-  { x: 8,  y: 10, sz: 64, bg: 'radial-gradient(circle at 32% 28%,#ff9a9e,#e74c3c 65%,#7b1c1c)', gl: 'rgba(231,76,60,.75)',   pts: 2, f: 330, rings: true,  name: 'Volcánico' },
-  { x: 73, y: 6,  sz: 54, bg: 'radial-gradient(circle at 38% 32%,#a8f0e0,#27ae60 58%,#145a32)', gl: 'rgba(39,174,96,.75)',   pts: 2, f: 440, rings: false, name: 'Esmeralda' },
-  { x: 88, y: 42, sz: 42, bg: 'radial-gradient(circle at 33% 28%,#ffe8c0,#f39c12 58%,#b7770d)', gl: 'rgba(243,156,18,.75)',  pts: 2, f: 550, rings: false, name: 'Dorado' },
-  { x: 2,  y: 44, sz: 48, bg: 'radial-gradient(circle at 38% 28%,#e8d0f5,#8e44ad 58%,#5b2c6f)', gl: 'rgba(142,68,173,.75)', pts: 2, f: 392, rings: true,  name: 'Amatista' },
-  { x: 55, y: 2,  sz: 36, bg: 'radial-gradient(circle at 33% 33%,#b0d8f5,#2980b9 58%,#1a4a72)', gl: 'rgba(41,128,185,.75)', pts: 2, f: 494, rings: false, name: 'Zafiro' },
-  { x: 28, y: 5,  sz: 30, bg: 'radial-gradient(circle at 38% 28%,#f8d0f5,#c84fc8 58%,#8a1a8a)', gl: 'rgba(200,79,200,.75)', pts: 2, f: 587, rings: false, name: 'Rosa' },
-  { x: 62, y: 50, sz: 38, bg: 'radial-gradient(circle at 33% 28%,#d0f8e0,#16a085 58%,#0d6655)', gl: 'rgba(22,160,133,.75)', pts: 2, f: 659, rings: false, name: 'Turquesa' },
-  { x: 42, y: 72, sz: 28, bg: 'radial-gradient(circle at 35% 30%,#ffe0b0,#e67e22 58%,#9a5315)', gl: 'rgba(230,126,34,.75)', pts: 2, f: 440, rings: false, name: 'Naranja' },
+/* ══════ TIPOS ══════ */
+type Vec2 = { x: number; y: number };
+type Paint = { x: number; y: number; r: number; color: string; id: number };
+type DraggableObj = {
+  id: number; x: number; y: number; emoji: string; sz: number;
+  label: string; color: string; dragging: boolean; rotation: number;
+  scale: number; zIndex: number; reaction: string;
+};
+type Star = { id: number; x: number; y: number; sz: number; opacity: number; twinkle: number };
+type Sparkle = { id: number; x: number; y: number; color: string };
+type Bubble = { id: number; x: number; y: number; sz: number; color: string };
+
+const PALETTE = [
+  '#FF6B9D', '#FF8E53', '#FFD93D', '#6BCB77', '#4D96FF',
+  '#C77DFF', '#FF6B6B', '#00D4C8', '#FFB347', '#98FF98',
+  '#FF99CC', '#87CEEB', '#DDA0DD', '#F0E68C', '#FFA07A',
 ];
 
-type Spec = { id: string; e: string; pts: number; snd: () => void; vb: number | number[]; anim: string; fx?: string; sz: [number, number] };
-const SPECS: Spec[] = [
-  { id: 'rocket',  e: '🚀', pts: 4, snd: S.rocket,  vb: 50,              anim: 'rocketA', sz: [36, 52] },
-  { id: 'ufo',     e: '🛸', pts: 5, snd: S.ufo,     vb: [30,20,30,20,30], anim: 'ufoA',    fx: 'ufo',    sz: [36, 48] },
-  { id: 'comet',   e: '☄️',  pts: 3, snd: S.comet,   vb: 40,              anim: 'cometA',  sz: [30, 44] },
-  { id: 'sat',     e: '🛰️',  pts: 3, snd: S.sat,     vb: 30,              anim: 'satA',    sz: [30, 42] },
-  { id: 'rainbow', e: '🌈', pts: 2, snd: S.nebula,  vb: 20,              anim: 'rainA',   sz: [34, 50] },
-  { id: 'black',   e: '🕳️', pts: 8, snd: S.black,   vb: [80,40,80,40,80,40,150], anim: 'blackA', fx: 'blackhole', sz: [38, 54] },
-  { id: 'meteor',  e: '🌑', pts: 4, snd: S.meteor,  vb: [60,30,60],      anim: 'meteorA', sz: [28, 42] },
-  { id: 'galaxy',  e: '🌌', pts: 6, snd: S.galaxy,  vb: [50,25,50,25,100], anim: 'galaxyA', fx: 'aurora', sz: [40, 56] },
-  { id: 'alien',   e: '👾', pts: 5, snd: S.alien,   vb: [40,20,40],      anim: 'alienA',  fx: 'alien',  sz: [32, 46] },
-  { id: 'nova',    e: '💥', pts: 7, snd: S.nova,    vb: [100,50,100,50,200], anim: 'novaA', fx: 'nova', sz: [36, 52] },
-  { id: 'nebula',  e: '🌫️', pts: 3, snd: S.nebula,  vb: 25,              anim: 'nebA',    sz: [38, 54] },
-  { id: 'portal',  e: '🌀', pts: 6, snd: S.portal,  vb: [60,30,60,30,60], anim: 'portalA', fx: 'portal', sz: [34, 50] },
-  { id: 'ice',     e: '🧊', pts: 3, snd: () => sweep(1200,800,0.3,0.2), vb: 20, anim: 'iceA', sz: [28, 40] },
-  { id: 'crystal', e: '💎', pts: 4, snd: () => chord([1047,1319,1568],60,0.4,0.2), vb: [30,20,30], anim: 'crystalA', sz: [30, 44] },
-  { id: 'fire',    e: '🔥', pts: 3, snd: () => osc(200,0.5,0.3,'sawtooth'), vb: 35, anim: 'fireA', sz: [28, 42] },
-  { id: 'thunder', e: '⚡', pts: 4, snd: () => { osc(80,0.1,0.4,'sawtooth'); setTimeout(()=>osc(800,0.2,0.2,'square'),80); }, vb: [80,40,80], anim: 'thunderA', sz: [26, 38] },
-  { id: 'sun',     e: '☀️',  pts: 5, snd: () => chord([440,550,660,880],70,0.5,0.22), vb: [50,30,50], anim: 'sunA', fx: 'sun', sz: [38, 54] },
-  { id: 'aurora2', e: '🌟', pts: 2, snd: S.star,    vb: 15,              anim: 'starA',   sz: [22, 34] },
+const INITIAL_OBJECTS: Omit<DraggableObj, 'dragging' | 'reaction' | 'zIndex'>[] = [
+  { id: 1,  emoji: '🌟', label: 'estrella',  sz: 52, color: '#FFD700', x: 8,  y: 12, rotation: 0,  scale: 1 },
+  { id: 2,  emoji: '🪐', label: 'planeta',   sz: 64, color: '#B8A9FF', x: 72, y: 8,  rotation: 0,  scale: 1 },
+  { id: 3,  emoji: '🌙', label: 'luna',       sz: 56, color: '#FFFACD', x: 88, y: 38, rotation: 0, scale: 1 },
+  { id: 4,  emoji: '☀️',  label: 'sol',        sz: 58, color: '#FFD700', x: 4,  y: 40, rotation: 0, scale: 1 },
+  { id: 5,  emoji: '🌈', label: 'arcoíris',  sz: 54, color: '#FF6B9D', x: 40, y: 4,  rotation: 0,  scale: 1 },
+  { id: 6,  emoji: '☄️',  label: 'cometa',    sz: 50, color: '#FF8E53', x: 60, y: 55, rotation: -30, scale: 1 },
+  { id: 7,  emoji: '🚀', label: 'cohete',    sz: 52, color: '#4D96FF', x: 20, y: 58, rotation: -15, scale: 1 },
+  { id: 8,  emoji: '🛸', label: 'ovni',      sz: 56, color: '#6BCB77', x: 80, y: 65, rotation: 0,  scale: 1 },
+  { id: 9,  emoji: '💫', label: 'destellos', sz: 48, color: '#C77DFF', x: 50, y: 70, rotation: 0,  scale: 1 },
+  { id: 10, emoji: '🌌', label: 'galaxia',   sz: 62, color: '#4D96FF', x: 28, y: 22, rotation: 0,  scale: 1 },
+  { id: 11, emoji: '⭐', label: 'estrella2', sz: 44, color: '#FFD93D', x: 15, y: 72, rotation: 0,  scale: 1 },
+  { id: 12, emoji: '🌠', label: 'meteorito', sz: 48, color: '#FF8E53', x: 64, y: 28, rotation: 20, scale: 1 },
+  { id: 13, emoji: '🌊', label: 'ola',        sz: 50, color: '#87CEEB', x: 46, y: 42, rotation: 0, scale: 1 },
+  { id: 14, emoji: '🎇', label: 'fuegos',    sz: 52, color: '#FF6B6B', x: 84, y: 18, rotation: 0,  scale: 1 },
+  { id: 15, emoji: '🦋', label: 'mariposa',  sz: 48, color: '#FF99CC', x: 32, y: 50, rotation: 0,  scale: 1 },
 ];
+
+/* Combinaciones: arrastrar A sobre B → resultado */
+const COMBOS: Record<string, { emoji: string; label: string; sound: () => void }> = {
+  'estrella+planeta':  { emoji: '🌟🪐', label: '¡Sistema solar!', sound: () => chord([523,659,784,1047]) },
+  'sol+luna':          { emoji: '🌅',    label: '¡Amanecer!',      sound: () => chord([440,550,660,880]) },
+  'cohete+planeta':    { emoji: '🚀🪐',  label: '¡Despegue!',      sound: () => sweep(200,1000,0.6) },
+  'ovni+estrella':     { emoji: '👽✨',  label: '¡Contacto!',      sound: () => chord([300,400,500,600]) },
+  'cometa+luna':       { emoji: '💥🌙',  label: '¡Impacto lunar!', sound: () => { osc(100,0.5,0.35,'sawtooth'); setTimeout(()=>chord([523,659,784]),300); } },
+  'arcoíris+sol':      { emoji: '🌈☀️',  label: '¡Magia solar!',   sound: () => chord([523,659,784,1047,1319]) },
+  'galaxia+estrella':  { emoji: '🌌⭐',  label: '¡Supernova!',     sound: () => chord([880,660,440,220]) },
+  'mariposa+arcoíris': { emoji: '🦋🌈',  label: '¡Magia!',         sound: () => chord([784,1047,1319,1568]) },
+};
 
 const r  = (a: number, b: number) => a + Math.random() * (b - a);
 const ri = (a: number, b: number) => Math.floor(r(a, b));
-let uid = 0;
-
-type Particle = { id: number; x: number; y: number; e: string };
-type Bubble   = { id: number; x: number; y: number; c: string; sz: number };
-type FObj     = { id: number; x: number; y: number; sz: number; sp: Spec };
-type FStar    = { id: number; x: number; y: number; sz: number; e: string };
-type Ring     = { id: number; x: number; y: number; sz: number; c: string };
-type Flash    = { id: number; bg: string };
-
-const PARTY = ['✨','🌟','💫','⚡','🎉','🌈','💥','🎊','💎','🔮','🪄','🌠','🦋','🌺','🍀','🎈','🎆','🎇','⭐','🌙'];
-const BCOLS  = ['#B8A9FF','#00D4C8','#FFD700','#FFB3D1','#A8EDEA','#87CEEB','#98FB98','#FFA07A','#FF85A1','#85FFBD'];
+let uid = 1000;
 
 export default function Mundo0() {
-  const [parts,   setParts]   = useState<Particle[]>([]);
+  const router = useRouter();
+  const worldRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+
+  const [objects, setObjects] = useState<DraggableObj[]>(() =>
+    INITIAL_OBJECTS.map(o => ({ ...o, dragging: false, reaction: '', zIndex: o.id }))
+  );
+  const [sparkles, setSparkles] = useState<Sparkle[]>([]);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
-  const [fobjs,   setFobjs]   = useState<FObj[]>([]);
-  const [fstars,  setFstars]  = useState<FStar[]>([]);
-  const [rings,   setRings]   = useState<Ring[]>([]);
-  const [flashes, setFlashes] = useState<Flash[]>([]);
-  const [score,   setScore]   = useState(0);
-  const [combo,   setCombo]   = useState('');
-  const [showC,   setShowC]   = useState(false);
-  const [tqAnim,  setTqAnim]  = useState('tFloat');
-  const [moon,    setMoon]    = useState(1);
-  const [aurora,  setAurora]  = useState(false);
-  const [win,     setWin]     = useState(false);
-  const [hint,    setHint]    = useState(false);
+  const [paintColor, setPaintColor] = useState(PALETTE[0]);
+  const [isPainting, setIsPainting] = useState(false);
+  const [showPalette, setShowPalette] = useState(false);
+  const [comboMsg, setComboMsg] = useState('');
+  const [showCombo, setShowCombo] = useState(false);
+  const [toqwowMood, setToqwowMood] = useState<'idle' | 'happy' | 'dance' | 'wave'>('idle');
+  const [toqwowPos, setToqwowPos] = useState({ x: 50, y: 75 });
+  const [draggingToqwow, setDraggingToqwow] = useState(false);
+  const [bgColor, setBgColor] = useState('linear-gradient(180deg,#04051a 0%,#080d3a 35%,#093058 65%,#074a55 100%)');
 
-  const sRef  = useRef(0);
-  const cRef  = useRef(0);
-  const cT    = useRef<any>(null);
-  const iT    = useRef<any>(null);
-  const wFired= useRef(false);
-  const WIN   = 60;
-  const router= useRouter();
+  const draggingId = useRef<number | null>(null);
+  const dragOffset = useRef<Vec2>({ x: 0, y: 0 });
+  const maxZ = useRef(20);
+  const painting = useRef(false);
+  const lastPaint = useRef<Vec2 | null>(null);
+  const toqwowDragging = useRef(false);
+  const toqwowOffset = useRef<Vec2>({ x: 0, y: 0 });
+  const idleTimer = useRef<any>(null);
 
-  /* ── Flash ── */
-  const flash = useCallback((bg: string, ms = 400) => {
-    const id = uid++;
-    setFlashes(f => [...f, { id, bg }]);
-    setTimeout(() => setFlashes(f => f.filter(x => x.id !== id)), ms);
+  /* ── Canvas setup ── */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    ctxRef.current = canvas.getContext('2d');
+    const onResize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  /* ── Ring ── */
-  const ring = useCallback((x: number, y: number, sz: number, c: string) => {
-    const id = uid++;
-    setRings(rr => [...rr, { id, x, y, sz, c }]);
-    setTimeout(() => setRings(rr => rr.filter(r => r.id !== id)), 650);
-  }, []);
+  /* ── Estrellas de fondo estáticas ── */
+  const bgStars = useMemo(() => Array.from({ length: 100 }, (_, i) => ({
+    id: i, x: r(0, 100), y: r(0, 90), sz: r(1, i % 6 === 0 ? 4 : 2.5),
+    opacity: r(0.15, 0.9), twinkle: ri(0, 4),
+  })), []);
 
-  /* ── Burst ── */
-  const burst = useCallback((x: number, y: number, n = 10) => {
-    const np: Particle[] = Array.from({ length: n }, () => ({ id: uid++, x, y, e: PARTY[ri(0, PARTY.length)] }));
-    setParts(p => [...p, ...np]);
-    setTimeout(() => setParts(p => p.filter(b => !np.find(n => n.id === b.id))), 1000);
-    const nb: Bubble[] = Array.from({ length: 7 }, () => ({ id: uid++, x: x + r(-40, 40), y: y + r(-15, 15), c: BCOLS[ri(0, BCOLS.length)], sz: r(5, 18) }));
+  /* ── Sparkles burst ── */
+  const addSparkles = useCallback((x: number, y: number, color: string) => {
+    const ns: Sparkle[] = Array.from({ length: 8 }, () => ({ id: uid++, x: x + r(-30, 30), y: y + r(-30, 30), color }));
+    setSparkles(s => [...s, ...ns]);
+    setTimeout(() => setSparkles(s => s.filter(sp => !ns.find(n => n.id === sp.id))), 800);
+    const nb: Bubble[] = Array.from({ length: 5 }, () => ({ id: uid++, x: x + r(-25, 25), y: y + r(-20, 20), sz: r(4, 14), color: PALETTE[ri(0, PALETTE.length)] }));
     setBubbles(b => [...b, ...nb]);
-    setTimeout(() => setBubbles(b => b.filter(bb => !nb.find(n => n.id === bb.id))), 1900);
+    setTimeout(() => setBubbles(b => b.filter(bb => !nb.find(n => n.id === bb.id))), 1600);
+    vib(20);
   }, []);
 
-  /* ── Score ── */
-  const addScore = useCallback((pts: number, x: number, y: number, snd: () => void, vb: number | number[] = 25, fx?: string) => {
-    burst(x, y, pts > 4 ? 16 : 10);
-    ring(x, y, 60, BCOLS[ri(0, BCOLS.length)]);
-    snd(); vib(vb);
-    cRef.current++;
-    if (cT.current) clearTimeout(cT.current);
-    cT.current = setTimeout(() => { cRef.current = 0; }, 1700);
-    const mul = cRef.current > 5 ? 3 : cRef.current > 3 ? 2 : cRef.current > 1 ? 1.5 : 1;
-    const got = Math.round(pts * mul);
-    sRef.current = Math.min(sRef.current + got, WIN);
-    setScore(sRef.current);
-    if (cRef.current > 1) { setCombo(cRef.current > 6 ? `🔥🔥🔥 x${cRef.current} MEGA!` : cRef.current > 3 ? `🔥 x${cRef.current} COMBO!` : `✨ x${cRef.current}`); setShowC(true); setTimeout(() => setShowC(false), 1100); }
-
-    /* Special FX */
-    if (fx === 'blackhole') { flash('rgba(0,0,0,.8)', 500); for (let i = 0; i < 8; i++) setTimeout(() => burst(r(0, window.innerWidth), r(0, window.innerHeight), 5), i * 40); }
-    if (fx === 'nova')      { flash('rgba(255,220,60,.5)', 600); for (let i = 0; i < 24; i++) setTimeout(() => burst(r(0, window.innerWidth), r(0, window.innerHeight), 5), i * 55); }
-    if (fx === 'aurora')    { setAurora(true); setTimeout(() => setAurora(false), 2500); }
-    if (fx === 'ufo')       { for (let i = 0; i < 8; i++) setTimeout(() => burst(x + r(-120, 120), y + r(-80, 80), 6), i * 70); }
-    if (fx === 'alien')     { flash('rgba(0,255,120,.18)', 350); }
-    if (fx === 'portal')    { flash('rgba(138,43,226,.35)', 500); setAurora(true); setTimeout(() => setAurora(false), 1500); }
-    if (fx === 'sun')       { flash('rgba(255,200,0,.3)', 400); }
-
-    /* Reset idle */
-    if (iT.current) clearTimeout(iT.current);
-    setHint(false);
-    iT.current = setTimeout(() => setHint(true), 8000);
-
-    /* Win */
-    if (sRef.current >= WIN && !wFired.current) {
-      wFired.current = true;
-      setTqAnim('tqDance');
-      S.win(); vib([100, 50, 100, 50, 100, 50, 250]);
-      for (let i = 0; i < 40; i++) setTimeout(() => burst(r(0, window.innerWidth), r(0, window.innerHeight), 7), i * 70);
-      setTimeout(() => setWin(true), 2200);
-    }
-  }, [burst, ring, flash]);
-
-  /* ── Spawn objects ── */
-  const spawnObj = useCallback(() => {
-    const sp = SPECS[ri(0, SPECS.length)];
-    const sz = ri(sp.sz[0], sp.sz[1]);
-    setFobjs(fo => [...fo, { id: uid++, x: r(4, 86), y: r(6, 72), sz, sp }]);
+  /* ── Toqwow idle hint ── */
+  const resetIdleTimer = useCallback(() => {
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    idleTimer.current = setTimeout(() => {
+      setToqwowMood('wave');
+      setTimeout(() => setToqwowMood('idle'), 2000);
+    }, 10000);
   }, []);
-  const clickObj = useCallback((id: number, x: number, y: number, fo: FObj) => {
-    addScore(fo.sp.pts, x, y, fo.sp.snd, fo.sp.vb, fo.sp.fx);
-    ring(x, y, fo.sz * 2.2, 'rgba(255,255,255,.7)');
-    setFobjs(f => f.filter(o => o.id !== id));
-    setTimeout(spawnObj, r(2500, 6000));
-  }, [addScore, ring, spawnObj]);
-
-  /* ── Spawn stars ── */
-  const spawnStar = useCallback(() => {
-    const sz = ri(20, 38);
-    setFstars(fs => [...fs, { id: uid++, x: r(4, 90), y: r(4, 80), sz, e: ['⭐', '🌟', '💫', '✨', '🌠', '🌙', '☀️', '💥'][ri(0, 8)] }]);
-  }, []);
-  const clickStar = useCallback((id: number, x: number, y: number) => {
-    addScore(1, x, y, S.star, 15);
-    setFstars(fs => fs.filter(s => s.id !== id));
-    setTimeout(spawnStar, r(1200, 3500));
-  }, [addScore, spawnStar]);
 
   useEffect(() => {
-    for (let i = 0; i < 7; i++) setTimeout(spawnStar, i * 500);
-    for (let i = 0; i < 4; i++) setTimeout(spawnObj, i * 1600 + 600);
-    const i1 = setInterval(() => { if (Math.random() < .5) spawnStar(); }, 3500);
-    const i2 = setInterval(() => { if (Math.random() < .65) spawnObj(); }, 5500);
-    iT.current = setTimeout(() => setHint(true), 8000);
-    return () => { clearInterval(i1); clearInterval(i2); };
-  }, [spawnStar, spawnObj]);
+    resetIdleTimer();
+    return () => { if (idleTimer.current) clearTimeout(idleTimer.current); };
+  }, [resetIdleTimer]);
 
-  const filled = Math.min(5, Math.floor(sRef.current / (WIN / 5)));
+  /* ── Paint on canvas ── */
+  const paint = useCallback((clientX: number, clientY: number) => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = paintColor;
+    if (lastPaint.current) {
+      const dx = x - lastPaint.current.x;
+      const dy = y - lastPaint.current.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const steps = Math.ceil(dist / 8);
+      for (let i = 0; i <= steps; i++) {
+        const px = lastPaint.current.x + (dx * i) / steps;
+        const py = lastPaint.current.y + (dy * i) / steps;
+        ctx.beginPath();
+        ctx.arc(px, py, 14, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI * 2); ctx.fill();
+    }
+    lastPaint.current = { x, y };
+    osc(ri(400, 800), 0.08, 0.06);
+  }, [paintColor]);
+
+  /* ── Check combo ── */
+  const checkCombo = useCallback((draggedId: number, targetId: number) => {
+    const dragged = objects.find(o => o.id === draggedId);
+    const target = objects.find(o => o.id === targetId);
+    if (!dragged || !target) return false;
+    const key1 = `${dragged.label}+${target.label}`;
+    const key2 = `${target.label}+${dragged.label}`;
+    const combo = COMBOS[key1] || COMBOS[key2];
+    if (combo) {
+      setComboMsg(`${combo.emoji} ${combo.label}`);
+      setShowCombo(true);
+      combo.sound();
+      vib([80, 40, 80]);
+      setTimeout(() => setShowCombo(false), 2500);
+      setToqwowMood('dance');
+      setTimeout(() => setToqwowMood('idle'), 2500);
+      // Celebración de partículas
+      for (let i = 0; i < 16; i++) setTimeout(() => addSparkles(r(window.innerWidth * .2, window.innerWidth * .8), r(window.innerHeight * .2, window.innerHeight * .7), PALETTE[ri(0, PALETTE.length)]), i * 60);
+      return true;
+    }
+    return false;
+  }, [objects, addSparkles]);
+
+  /* ── Pointer events para objetos ── */
+  const onObjPointerDown = useCallback((e: React.PointerEvent, id: number) => {
+    if (isPainting) return;
+    e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    draggingId.current = id;
+    maxZ.current++;
+    const obj = objects.find(o => o.id === id)!;
+    const worldRect = worldRef.current!.getBoundingClientRect();
+    const objX = (obj.x / 100) * worldRect.width;
+    const objY = (obj.y / 100) * worldRect.height;
+    dragOffset.current = { x: e.clientX - worldRect.left - objX, y: e.clientY - worldRect.top - objY };
+    setObjects(prev => prev.map(o => o.id === id ? { ...o, dragging: true, zIndex: maxZ.current, scale: 1.12 } : o));
+    osc(ri(400, 700), 0.12, 0.15); vib(15);
+    resetIdleTimer();
+  }, [objects, isPainting, resetIdleTimer]);
+
+  const onObjPointerMove = useCallback((e: React.PointerEvent, id: number) => {
+    if (draggingId.current !== id) return;
+    const worldRect = worldRef.current!.getBoundingClientRect();
+    const nx = ((e.clientX - worldRect.left - dragOffset.current.x) / worldRect.width) * 100;
+    const ny = ((e.clientY - worldRect.top - dragOffset.current.y) / worldRect.height) * 100;
+    setObjects(prev => prev.map(o => o.id === id ? { ...o, x: Math.max(0, Math.min(92, nx)), y: Math.max(0, Math.min(88, ny)) } : o));
+    addSparkles(e.clientX - worldRect.left, e.clientY - worldRect.top, paintColor);
+  }, [addSparkles, paintColor]);
+
+  const onObjPointerUp = useCallback((e: React.PointerEvent, id: number) => {
+    if (draggingId.current !== id) return;
+    draggingId.current = null;
+    const worldRect = worldRef.current!.getBoundingClientRect();
+    const dropX = e.clientX - worldRect.left;
+    const dropY = e.clientY - worldRect.top;
+    // Check if dropped on another object
+    let combo = false;
+    objects.forEach(other => {
+      if (other.id === id || other.dragging) return;
+      const ox = (other.x / 100) * worldRect.width + other.sz / 2;
+      const oy = (other.y / 100) * worldRect.height + other.sz / 2;
+      const dist = Math.sqrt((dropX - ox) ** 2 + (dropY - oy) ** 2);
+      if (dist < other.sz * 0.8 && !combo) { combo = checkCombo(id, other.id); }
+    });
+    setObjects(prev => prev.map(o => o.id === id ? { ...o, dragging: false, scale: 1, reaction: combo ? 'glow' : '' } : o));
+    setTimeout(() => setObjects(prev => prev.map(o => o.id === id ? { ...o, reaction: '' } : o)), 1000);
+    osc(ri(300, 600), 0.18, 0.18); vib(12);
+  }, [objects, checkCombo]);
+
+  /* ── Tap sin drag ── */
+  const onObjTap = useCallback((id: number, x: number, y: number) => {
+    const obj = objects.find(o => o.id === id);
+    if (!obj) return;
+    addSparkles(x, y, obj.color);
+    osc(ri(440, 880), 0.2, 0.2); vib(18);
+    setToqwowMood('happy'); setTimeout(() => setToqwowMood('idle'), 1000);
+    resetIdleTimer();
+  }, [objects, addSparkles, resetIdleTimer]);
+
+  /* ── Toqwow drag ── */
+  const onTqDown = useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture(e.pointerId);
+    toqwowDragging.current = true;
+    setDraggingToqwow(true);
+    const worldRect = worldRef.current!.getBoundingClientRect();
+    toqwowOffset.current = { x: e.clientX - worldRect.left - (toqwowPos.x / 100) * worldRect.width, y: e.clientY - worldRect.top - (toqwowPos.y / 100) * worldRect.height };
+    chord([523, 659, 784]);
+    resetIdleTimer();
+  }, [toqwowPos, resetIdleTimer]);
+
+  const onTqMove = useCallback((e: React.PointerEvent) => {
+    if (!toqwowDragging.current) return;
+    const worldRect = worldRef.current!.getBoundingClientRect();
+    const nx = ((e.clientX - worldRect.left - toqwowOffset.current.x) / worldRect.width) * 100;
+    const ny = ((e.clientY - worldRect.top - toqwowOffset.current.y) / worldRect.height) * 100;
+    setToqwowPos({ x: Math.max(2, Math.min(85, nx)), y: Math.max(5, Math.min(85, ny)) });
+    setToqwowMood('dance');
+    if (Math.random() < 0.3) addSparkles(e.clientX - worldRect.left, e.clientY - worldRect.top, '#B8A9FF');
+  }, [addSparkles]);
+
+  const onTqUp = useCallback((e: React.PointerEvent) => {
+    toqwowDragging.current = false;
+    setDraggingToqwow(false);
+    setToqwowMood('happy');
+    setTimeout(() => setToqwowMood('idle'), 1500);
+    chord([784, 1047, 1319]);
+    vib([30, 15, 30]);
+  }, []);
+
+  /* ── World pointer events (painting) ── */
+  const onWorldDown = useCallback((e: React.PointerEvent) => {
+    if (draggingId.current !== null || toqwowDragging.current) return;
+    if (isPainting) {
+      painting.current = true;
+      lastPaint.current = null;
+      paint(e.clientX, e.clientY);
+    }
+    resetIdleTimer();
+  }, [isPainting, paint, resetIdleTimer]);
+
+  const onWorldMove = useCallback((e: React.PointerEvent) => {
+    if (painting.current && isPainting) paint(e.clientX, e.clientY);
+  }, [isPainting, paint]);
+
+  const onWorldUp = useCallback(() => {
+    painting.current = false;
+    lastPaint.current = null;
+  }, []);
+
+  const clearCanvas = () => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
+    osc(200, 0.4, 0.2); vib(30);
+  };
+
+  const tqStyle: Record<string, string> = {
+    idle: 'tFloat 3.5s ease-in-out infinite',
+    happy: 'tqHappy .4s ease-in-out 3',
+    dance: 'tqDance .35s ease-in-out infinite alternate',
+    wave: 'tqWave .5s ease-in-out 4',
+  };
 
   return (
-    <div id="w" onClick={e => { if ((e.target as HTMLElement).id === 'w') addScore(1, e.nativeEvent.offsetX, e.nativeEvent.offsetY, () => osc(ri(350, 750), 0.2, 0.12), 12); }}
-      style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative', cursor: 'default', fontFamily: 'system-ui,sans-serif', background: 'linear-gradient(180deg,#04051a 0%,#080d3a 30%,#093058 65%,#074a55 100%)' }}>
+    <div
+      ref={worldRef}
+      onPointerDown={onWorldDown}
+      onPointerMove={onWorldMove}
+      onPointerUp={onWorldUp}
+      style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative', background: bgColor, cursor: isPainting ? 'crosshair' : 'default', fontFamily: 'system-ui,sans-serif', touchAction: 'none' }}
+    >
+      {/* Canvas de pintura */}
+      <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none' }} />
 
-      {/* Aurora */}
-      {aurora && <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 3, background: 'linear-gradient(180deg,rgba(0,255,160,.1) 0%,rgba(80,0,255,.07) 40%,transparent 75%)', animation: 'auroraIn 2.5s ease-in-out forwards' }} />}
-
-      {/* Flashes */}
-      {flashes.map(f => <div key={f.id} style={{ position: 'absolute', inset: 0, background: f.bg, pointerEvents: 'none', zIndex: 45 }} />)}
-
-      {/* Nebulosas de fondo */}
-      {[{ l: 5, t: 10, c: 'rgba(100,40,220,.07)' }, { l: 60, t: 25, c: 'rgba(0,180,200,.05)' }, { l: 15, t: 55, c: 'rgba(255,80,150,.04)' }, { l: 75, t: 60, c: 'rgba(80,200,100,.04)' }].map((n, i) => (
-        <div key={i} style={{ position: 'absolute', left: `${n.l}%`, top: `${n.t}%`, width: 280, height: 180, borderRadius: '50%', background: n.c, filter: 'blur(40px)', pointerEvents: 'none' }} />
+      {/* Estrellas fijas de fondo */}
+      {bgStars.map(s => (
+        <div key={s.id} style={{ position: 'absolute', borderRadius: '50%', pointerEvents: 'none', width: s.sz, height: s.sz, background: s.id % 7 === 0 ? PALETTE[s.id % PALETTE.length] : 'white', opacity: s.opacity, top: `${s.y}%`, left: `${s.x}%`, animation: `tw${s.twinkle} ${r(2, 5)}s ${r(0, 4)}s infinite`, zIndex: 1 }} />
       ))}
 
-      {/* Estrellas de fondo */}
-      {Array.from({ length: 110 }).map((_, i) => (
-        <div key={i} style={{ position: 'absolute', borderRadius: '50%', pointerEvents: 'none', width: i % 5 === 0 ? `${r(2, 4.5)}px` : `${r(0.8, 2.5)}px`, height: i % 5 === 0 ? `${r(2, 4.5)}px` : `${r(0.8, 2.5)}px`, background: i % 6 === 0 ? BCOLS[i % BCOLS.length] : 'white', opacity: r(.12, .9), top: `${r(0, 92)}%`, left: `${r(0, 100)}%`, animation: `tw${i % 4} ${r(1.5, 5)}s ${r(0, 4)}s infinite` }} />
-      ))}
-
-      {/* Score */}
-      <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 7, zIndex: 30 }}>
-        {[1, 2, 3, 4, 5].map(i => <span key={i} style={{ fontSize: 26, transition: 'transform .35s', transform: i === filled ? 'scale(1.65)' : 'scale(1)', filter: i <= filled ? 'drop-shadow(0 0 8px #FFD700)' : 'none' }}>{i <= filled ? '⭐' : '☆'}</span>)}
-      </div>
-      <div style={{ position: 'absolute', top: 16, right: 16, fontSize: 12, color: 'rgba(255,255,255,.4)', zIndex: 30 }}>{sRef.current}/{WIN}</div>
-      <button onClick={() => router.push('/')} style={{ position: 'absolute', top: 14, left: 14, background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.18)', borderRadius: 50, padding: '6px 14px', fontSize: 13, color: 'white', cursor: 'pointer', zIndex: 30 }}>← Inicio</button>
-      {showC && <div style={{ position: 'absolute', top: 54, left: '50%', transform: 'translateX(-50%)', fontSize: 24, fontWeight: 900, color: '#FFD700', whiteSpace: 'nowrap', textShadow: '0 0 16px rgba(255,200,0,.9)', zIndex: 30, pointerEvents: 'none' }}>{combo}</div>}
-
-      {/* Planetas con anillos */}
-      {PLANETS.map((p, i) => (
-        <div key={i} style={{ position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, zIndex: 6 }}>
-          {p.rings && <div style={{ position: 'absolute', top: '50%', left: '50%', width: p.sz * 1.9, height: p.sz * .38, marginLeft: -p.sz * .95, marginTop: -p.sz * .19, borderRadius: '50%', border: '3.5px solid rgba(255,255,255,.22)', transform: 'rotateX(62deg)', pointerEvents: 'none', boxShadow: '0 0 8px rgba(255,255,255,.1)' }} />}
-          <div
-            onClick={e => { e.stopPropagation(); const el = e.currentTarget.parentElement!; addScore(p.pts, el.offsetLeft + p.sz / 2, el.offsetTop + p.sz / 2, () => S.planet(p.f), 35); ring(el.offsetLeft + p.sz / 2, el.offsetTop + p.sz / 2, p.sz * 1.1, p.gl); }}
-            style={{ width: p.sz, height: p.sz, borderRadius: '50%', background: p.bg, cursor: 'pointer', transition: 'transform .15s', animation: `pBob${i % 4} ${3.5 + i * .35}s ${i * .3}s ease-in-out infinite`, boxShadow: `inset -${p.sz * .16}px -${p.sz * .16}px ${p.sz * .28}px rgba(0,0,0,.55),0 0 ${p.sz * .65}px ${p.gl},0 0 ${p.sz * 1.4}px ${p.gl.replace('.75', '.2')}` }}
-            onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.18)')}
-            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
-            title={p.name}
-          />
-        </div>
-      ))}
-
-      {/* Luna */}
-      <div onClick={e => { e.stopPropagation(); setMoon(1.25); setTimeout(() => setMoon(1), 300); addScore(3, e.currentTarget.offsetLeft + 28, e.currentTarget.offsetTop + 28, S.moon, 45); ring(e.currentTarget.offsetLeft + 28, e.currentTarget.offsetTop + 28, 58, 'rgba(255,220,80,.8)'); for (let i = 0; i < 5; i++) setTimeout(() => burst(e.currentTarget.offsetLeft + r(-60, 60), e.currentTarget.offsetTop + r(-40, 40), 5), i * 70); }}
-        style={{ position: 'absolute', right: '12%', top: '13%', width: 56, height: 56, borderRadius: '50%', cursor: 'pointer', zIndex: 7, background: 'radial-gradient(circle at 33% 33%,#fffde7,#ffd54f 58%,#ffb300)', boxShadow: 'inset -9px -9px 18px rgba(0,0,0,.35),0 0 32px rgba(255,210,60,.7)', transform: `scale(${moon})`, transition: 'transform .22s', animation: 'moonPulse 4s ease-in-out infinite' }} />
-
-      {/* Estrellas flotantes */}
-      {fstars.map(fs => (
-        <div key={fs.id} onClick={e => { e.stopPropagation(); clickStar(fs.id, e.currentTarget.offsetLeft + fs.sz / 2, e.currentTarget.offsetTop + fs.sz / 2); }}
-          style={{ position: 'absolute', left: `${fs.x}%`, top: `${fs.y}%`, fontSize: fs.sz, cursor: 'pointer', zIndex: 13, lineHeight: 1, transition: 'transform .12s', animation: `starF ${r(2, 4)}s ease-in-out infinite` }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.5) rotate(20deg)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1) rotate(0deg)'; }}
-        >{fs.e}</div>
-      ))}
-
-      {/* Objetos especiales */}
-      {fobjs.map(fo => (
-        <div key={fo.id} onClick={e => { e.stopPropagation(); clickObj(fo.id, e.currentTarget.offsetLeft + fo.sz / 2, e.currentTarget.offsetTop + fo.sz / 2, fo); }}
-          style={{ position: 'absolute', left: `${fo.x}%`, top: `${fo.y}%`, fontSize: fo.sz, cursor: 'pointer', zIndex: 14, lineHeight: 1, transition: 'transform .12s', animation: `${fo.sp.anim} ${r(3, 6)}s ease-in-out infinite` }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.38)'; e.currentTarget.style.filter = 'drop-shadow(0 0 14px gold)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.filter = ''; }}
-          title={fo.sp.id}
-        >{fo.sp.e}</div>
-      ))}
-
-      {/* Anillos */}
-      {rings.map(rr => <div key={rr.id} style={{ position: 'absolute', left: rr.x - rr.sz / 2, top: rr.y - rr.sz / 2, width: rr.sz, height: rr.sz, borderRadius: '50%', border: `2.5px solid ${rr.c}`, pointerEvents: 'none', zIndex: 22, animation: 'ringOut .65s ease-out forwards' }} />)}
-
-      {/* Toqwow */}
-      <div
-        onClick={e => { e.stopPropagation(); addScore(6, window.innerWidth / 2, window.innerHeight * .65, S.toqwow, [55, 30, 55, 30, 110], 'nova'); for (let i = 0; i < 16; i++) setTimeout(() => burst(r(0, window.innerWidth), r(0, window.innerHeight), 7), i * 55); }}
-        style={{ position: 'absolute', bottom: 48, left: '50%', width: 'min(168px,29vw)', cursor: 'pointer', zIndex: 16, filter: 'drop-shadow(0 0 26px rgba(184,169,255,.85))', transform: 'translateX(-50%)', animation: `${tqAnim} 3.2s ease-in-out infinite`, transition: 'filter .2s' }}
-        onMouseEnter={e => (e.currentTarget.style.filter = 'drop-shadow(0 0 44px rgba(184,169,255,1))')}
-        onMouseLeave={e => (e.currentTarget.style.filter = 'drop-shadow(0 0 26px rgba(184,169,255,.85))')}
-      >
-        <Image src="/toqwow-mascota.png" alt="Toqwow" width={168} height={212} style={{ objectFit: 'contain', width: '100%', height: 'auto', mixBlendMode: 'screen' }} priority />
+      {/* UI top */}
+      <div style={{ position: 'absolute', top: 12, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 14px', zIndex: 40 }}>
+        <button onClick={() => router.push('/')} style={{ background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.2)', borderRadius: 50, padding: '8px 16px', fontSize: 13, color: 'white', cursor: 'pointer' }}>← Inicio</button>
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'rgba(255,255,255,.7)', letterSpacing: 1 }}>🌍 Planeta Tiqui</div>
+        <button onClick={() => { setShowPalette(v => !v); setIsPainting(v => !v); }} style={{ background: isPainting ? paintColor : 'rgba(255,255,255,.1)', border: `2px solid ${isPainting ? 'white' : 'rgba(255,255,255,.2)'}`, borderRadius: 50, padding: '8px 16px', fontSize: 13, color: 'white', cursor: 'pointer', fontWeight: isPainting ? 700 : 400 }}>
+          {isPainting ? '🎨 Pintando' : '🖌️ Pintar'}
+        </button>
       </div>
 
-      {hint && !win && <div style={{ position: 'absolute', bottom: 228, left: '50%', transform: 'translateX(-50%)', background: 'rgba(255,255,255,.93)', borderRadius: 22, padding: '10px 22px', fontSize: 15, fontWeight: 700, color: '#4422aa', whiteSpace: 'nowrap', zIndex: 17, boxShadow: '0 4px 28px rgba(0,0,0,.28)', animation: 'hintPop .4s ease-out' }}>👆 ¡Toca los planetas y las estrellas!</div>}
-
-      {parts.map(p => <div key={p.id} style={{ position: 'absolute', left: p.x - 14, top: p.y - 14, fontSize: ri(20, 32), pointerEvents: 'none', zIndex: 26, lineHeight: 1, animation: 'burstP 1s ease-out forwards' }}>{p.e}</div>)}
-      {bubbles.map(b => <div key={b.id} style={{ position: 'absolute', left: b.x, top: b.y, width: b.sz, height: b.sz, borderRadius: '50%', background: b.c, opacity: .78, pointerEvents: 'none', zIndex: 21, animation: 'riseB 1.9s ease-out forwards' }} />)}
-
-      {!win && <div style={{ position: 'absolute', bottom: 13, left: '50%', transform: 'translateX(-50%)', color: 'rgba(255,255,255,.32)', fontSize: 11, pointerEvents: 'none', zIndex: 31, whiteSpace: 'nowrap', animation: 'hPulse 3s ease-in-out infinite' }}>🌟 ¡Toca todo lo que veas! — Toqwow te espera 🐨</div>}
-
-      {win && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 55, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(4,5,26,.9)', backdropFilter: 'blur(14px)', animation: 'fadeW .8s ease-out' }}>
-          <div style={{ fontSize: 96, animation: 'wBounce .5s ease-in-out infinite alternate', marginBottom: 6 }}>🎉</div>
-          <div style={{ fontSize: 52, fontWeight: 900, color: '#FFD700', textShadow: '0 0 36px rgba(255,200,0,.95)', marginBottom: 6, textAlign: 'center' }}>¡INCREÍBLE!</div>
-          <div style={{ fontSize: 20, color: 'rgba(255,255,255,.92)', marginBottom: 4, textAlign: 'center' }}>Conquistaste el Planeta Tiqui</div>
-          <div style={{ fontSize: 15, color: 'rgba(184,169,255,.8)', marginBottom: 30, textAlign: 'center' }}>Sistema Tiqui · Mundo 0 completado 🌌</div>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 32 }}>
-            {[1, 2, 3, 4, 5].map(i => <span key={i} style={{ fontSize: 42, filter: 'drop-shadow(0 0 10px #FFD700)', animation: `starPop .4s ${i * .1}s ease-out both` }}>⭐</span>)}
+      {/* Paleta de colores */}
+      {showPalette && (
+        <div style={{ position: 'absolute', top: 60, right: 14, zIndex: 41, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(12px)', borderRadius: 20, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxWidth: 160 }}>
+            {PALETTE.map(c => (
+              <div key={c} onClick={() => { setPaintColor(c); }} style={{ width: 32, height: 32, borderRadius: '50%', background: c, cursor: 'pointer', border: paintColor === c ? '3px solid white' : '2px solid rgba(255,255,255,.3)', boxShadow: paintColor === c ? '0 0 10px white' : 'none', transition: 'transform .12s', transform: paintColor === c ? 'scale(1.2)' : 'scale(1)' }} />
+            ))}
           </div>
-          <div style={{ display: 'flex', gap: 14 }}>
-            <button onClick={() => { sRef.current = 0; wFired.current = false; cRef.current = 0; setScore(0); setWin(false); setTqAnim('tFloat'); }} style={{ background: 'linear-gradient(135deg,#B8A9FF,#7C6AE8)', border: 'none', borderRadius: 50, padding: '15px 34px', fontSize: 18, fontWeight: 800, color: 'white', cursor: 'pointer', boxShadow: '0 0 32px rgba(184,169,255,.8)' }}>🔄 ¡Otra vez!</button>
-            <button onClick={() => router.push('/')} style={{ background: 'rgba(255,255,255,.11)', border: '2px solid rgba(255,255,255,.28)', borderRadius: 50, padding: '15px 34px', fontSize: 18, fontWeight: 800, color: 'white', cursor: 'pointer' }}>🏠 Inicio</button>
-          </div>
+          <button onClick={clearCanvas} style={{ background: 'rgba(255,80,80,.4)', border: '1px solid rgba(255,100,100,.4)', borderRadius: 12, padding: '6px 10px', color: 'white', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>🗑️ Borrar todo</button>
         </div>
       )}
 
+      {/* Objetos arrastrables */}
+      {objects.map(obj => (
+        <div
+          key={obj.id}
+          onPointerDown={e => onObjPointerDown(e, obj.id)}
+          onPointerMove={e => onObjPointerMove(e, obj.id)}
+          onPointerUp={e => onObjPointerUp(e, obj.id)}
+          onClick={() => !obj.dragging && onObjTap(obj.id, (obj.x / 100) * (worldRef.current?.offsetWidth || 800) + obj.sz / 2, (obj.y / 100) * (worldRef.current?.offsetHeight || 600) + obj.sz / 2)}
+          style={{
+            position: 'absolute', left: `${obj.x}%`, top: `${obj.y}%`,
+            fontSize: obj.sz, cursor: obj.dragging ? 'grabbing' : 'grab',
+            lineHeight: 1, zIndex: obj.zIndex + 3, touchAction: 'none',
+            transform: `scale(${obj.scale}) rotate(${obj.rotation}deg)`,
+            transition: obj.dragging ? 'none' : 'transform .2s',
+            filter: obj.dragging ? `drop-shadow(0 8px 20px ${obj.color})` : obj.reaction === 'glow' ? `drop-shadow(0 0 20px white)` : `drop-shadow(0 2px 8px ${obj.color}55)`,
+            animation: obj.dragging ? 'none' : `objFloat${(obj.id) % 5} ${3 + (obj.id % 4) * .4}s ease-in-out infinite`,
+            userSelect: 'none',
+          }}
+          title={obj.label}
+        >{obj.emoji}</div>
+      ))}
+
+      {/* TOQWOW — arrastrable */}
+      <div
+        onPointerDown={onTqDown}
+        onPointerMove={onTqMove}
+        onPointerUp={onTqUp}
+        style={{
+          position: 'absolute',
+          left: `${toqwowPos.x}%`, top: `${toqwowPos.y}%`,
+          width: 'min(140px,24vw)', cursor: draggingToqwow ? 'grabbing' : 'grab',
+          zIndex: 30, touchAction: 'none',
+          filter: `drop-shadow(0 0 ${draggingToqwow ? '32px' : '20px'} rgba(184,169,255,${draggingToqwow ? 1 : .8}))`,
+          animation: tqStyle[toqwowMood],
+          transform: draggingToqwow ? 'scale(1.15)' : 'scale(1)',
+          transition: draggingToqwow ? 'none' : 'filter .2s, transform .2s',
+          userSelect: 'none',
+        }}
+      >
+        <Image src="/toqwow-mascota.png" alt="Toqwow" width={140} height={175} style={{ objectFit: 'contain', width: '100%', height: 'auto', mixBlendMode: 'screen', pointerEvents: 'none' }} priority />
+      </div>
+
+      {/* Combo message */}
+      {showCombo && (
+        <div style={{ position: 'absolute', top: '38%', left: '50%', transform: 'translateX(-50%)', zIndex: 50, textAlign: 'center', animation: 'comboIn .4s ease-out' }}>
+          <div style={{ fontSize: 52, marginBottom: 4 }}>{comboMsg.split(' ')[0]}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#FFD700', textShadow: '0 0 20px rgba(255,200,0,.9)', background: 'rgba(0,0,0,.5)', borderRadius: 20, padding: '8px 20px', backdropFilter: 'blur(8px)' }}>{comboMsg.split(' ').slice(1).join(' ')}</div>
+        </div>
+      )}
+
+      {/* Sparkles */}
+      {sparkles.map(s => <div key={s.id} style={{ position: 'absolute', left: s.x, top: s.y, width: 8, height: 8, borderRadius: '50%', background: s.color, pointerEvents: 'none', zIndex: 25, animation: 'sparkleOut .8s ease-out forwards' }} />)}
+      {bubbles.map(b => <div key={b.id} style={{ position: 'absolute', left: b.x, top: b.y, width: b.sz, height: b.sz, borderRadius: '50%', background: b.color, opacity: .7, pointerEvents: 'none', zIndex: 24, animation: 'riseB 1.6s ease-out forwards' }} />)}
+
+      {/* Hint pintura */}
+      {isPainting && <div style={{ position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)', color: 'rgba(255,255,255,.55)', fontSize: 12, pointerEvents: 'none', zIndex: 40, whiteSpace: 'nowrap', background: 'rgba(0,0,0,.3)', padding: '6px 14px', borderRadius: 20 }}>🖌️ Arrastrá el dedo para pintar el espacio</div>}
+      {!isPainting && <div style={{ position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)', color: 'rgba(255,255,255,.32)', fontSize: 11, pointerEvents: 'none', zIndex: 40, whiteSpace: 'nowrap' }}>⬆️ Arrastrá los objetos · Toqwow también se mueve · ¡Combinalos!</div>}
+
       <style>{`
-        @keyframes tw0{0%,100%{opacity:.15}50%{opacity:.95}} @keyframes tw1{0%,100%{opacity:.75}50%{opacity:.08}} @keyframes tw2{0%,100%{opacity:.45}33%{opacity:.95}66%{opacity:.08}} @keyframes tw3{0%,100%{opacity:.6}50%{opacity:.1}}
-        @keyframes tFloat{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-18px)}}
-        @keyframes tqDance{0%{transform:translateX(-50%) rotate(-12deg) scale(1.18)}100%{transform:translateX(-50%) rotate(12deg) scale(1.18)}}
-        @keyframes pBob0{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}} @keyframes pBob1{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-6px) rotate(5deg)}} @keyframes pBob2{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}} @keyframes pBob3{0%,100%{transform:translateY(0)}25%{transform:translateY(-5px)}75%{transform:translateY(-3px)}}
-        @keyframes moonPulse{0%,100%{box-shadow:inset -9px -9px 18px rgba(0,0,0,.35),0 0 32px rgba(255,210,60,.7)}50%{box-shadow:inset -9px -9px 18px rgba(0,0,0,.35),0 0 52px rgba(255,230,80,1)}}
-        @keyframes starF{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-10px) rotate(15deg)}}
-        @keyframes rocketA{0%,100%{transform:translateY(0) rotate(-12deg)}50%{transform:translateY(-18px) rotate(12deg)}}
-        @keyframes ufoA{0%,100%{transform:translateX(0)}25%{transform:translateX(10px) rotate(5deg)}75%{transform:translateX(-10px) rotate(-5deg)}}
-        @keyframes cometA{0%{transform:translate(0,0) rotate(-35deg);opacity:1}100%{transform:translate(60px,45px) rotate(-35deg);opacity:0}}
-        @keyframes satA{0%,100%{transform:translateX(0) rotate(0deg)}50%{transform:translateX(25px) rotate(360deg)}}
-        @keyframes rainA{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.12);opacity:.85}}
-        @keyframes blackA{0%,100%{transform:scale(1) rotate(0deg)}50%{transform:scale(1.08) rotate(180deg)}}
-        @keyframes meteorA{0%{transform:translate(0,0) rotate(50deg)}100%{transform:translate(70px,70px) rotate(50deg);opacity:0}}
-        @keyframes galaxyA{0%,100%{transform:rotate(0deg) scale(1)}50%{transform:rotate(25deg) scale(1.1)}}
-        @keyframes alienA{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-14px) scale(1.12)}}
-        @keyframes novaA{0%,100%{transform:scale(1);filter:brightness(1)}50%{transform:scale(1.18);filter:brightness(1.6)}}
-        @keyframes nebA{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.15);opacity:1}}
-        @keyframes portalA{0%{transform:rotate(0deg) scale(1)}100%{transform:rotate(360deg) scale(1)}}
-        @keyframes iceA{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-8px) rotate(15deg)}}
-        @keyframes crystalA{0%,100%{transform:scale(1) rotate(0deg);filter:brightness(1)}50%{transform:scale(1.1) rotate(10deg);filter:brightness(1.5)}}
-        @keyframes fireA{0%,100%{transform:scale(1) translateY(0)}50%{transform:scale(1.12) translateY(-6px)}}
-        @keyframes thunderA{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.2)}}
-        @keyframes sunA{0%,100%{transform:scale(1) rotate(0deg);filter:brightness(1)}50%{transform:scale(1.1) rotate(180deg);filter:brightness(1.4)}}
-        @keyframes starA{0%,100%{transform:scale(1) rotate(0deg)}50%{transform:scale(1.3) rotate(72deg)}}
-        @keyframes ringOut{0%{transform:scale(1);opacity:.9}100%{transform:scale(3.5);opacity:0}}
-        @keyframes burstP{0%{opacity:1;transform:scale(.25) translateY(0) rotate(0deg)}100%{opacity:0;transform:scale(2) translateY(-90px) rotate(200deg)}}
-        @keyframes riseB{0%{opacity:.8;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-160px) scale(.1)}}
-        @keyframes auroraIn{0%{opacity:0}30%{opacity:1}80%{opacity:1}100%{opacity:0}}
-        @keyframes hintPop{0%{opacity:0;transform:translateX(-50%) translateY(12px)}100%{opacity:1;transform:translateX(-50%) translateY(0)}}
-        @keyframes hPulse{0%,100%{opacity:.28}50%{opacity:.75}}
-        @keyframes fadeW{from{opacity:0}to{opacity:1}} @keyframes wBounce{from{transform:scale(1) rotate(-10deg)}to{transform:scale(1.22) rotate(10deg)}}
-        @keyframes starPop{0%{transform:scale(0) rotate(-40deg)}60%{transform:scale(1.4) rotate(12deg)}100%{transform:scale(1) rotate(0deg)}}
+        @keyframes tw0{0%,100%{opacity:.15}50%{opacity:.95}} @keyframes tw1{0%,100%{opacity:.75}50%{opacity:.1}} @keyframes tw2{0%,100%{opacity:.45}33%{opacity:.9}66%{opacity:.1}} @keyframes tw3{0%,100%{opacity:.6}50%{opacity:.12}} @keyframes tw4{0%,100%{opacity:.3}50%{opacity:.85}}
+        @keyframes tFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-14px) scale(1)}}
+        @keyframes tqHappy{0%{transform:scale(1)}50%{transform:scale(1.2) rotate(8deg)}100%{transform:scale(1)}}
+        @keyframes tqDance{0%{transform:rotate(-12deg) scale(1.12)}100%{transform:rotate(12deg) scale(1.12)}}
+        @keyframes tqWave{0%,100%{transform:rotate(0deg)}25%{transform:rotate(15deg) scale(1.08)}75%{transform:rotate(-15deg) scale(1.08)}}
+        @keyframes objFloat0{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-8px) rotate(3deg)}}
+        @keyframes objFloat1{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-6px) scale(1.04)}}
+        @keyframes objFloat2{0%,100%{transform:translateX(0)}25%{transform:translateX(6px)}75%{transform:translateX(-6px)}}
+        @keyframes objFloat3{0%,100%{transform:rotate(0deg)}50%{transform:rotate(8deg)}}
+        @keyframes objFloat4{0%,100%{transform:translateY(0) translateX(0)}33%{transform:translateY(-5px) translateX(4px)}66%{transform:translateY(-3px) translateX(-4px)}}
+        @keyframes sparkleOut{0%{transform:scale(0);opacity:1}60%{transform:scale(1.5);opacity:.8}100%{transform:scale(2);opacity:0}}
+        @keyframes riseB{0%{opacity:.8;transform:translateY(0)}100%{opacity:0;transform:translateY(-120px) scale(.1)}}
+        @keyframes comboIn{0%{opacity:0;transform:translateX(-50%) scale(.5)}60%{opacity:1;transform:translateX(-50%) scale(1.15)}100%{transform:translateX(-50%) scale(1)}}
       `}</style>
     </div>
   );
