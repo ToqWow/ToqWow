@@ -1,0 +1,22 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --toq-lila:     #B8A9FF;
+  --toq-violeta:  #7C6AE8;
+  --toq-turquesa: #00D4C8;
+  --toq-rosa:     #FFB3D1;
+  --toq-dorado:   #FFD700;
+  --toq-crema:    #FFE8D6;
+  --toq-coral:    #FF7F7F;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+html, body { overflow: hidden; height: 100%; }
+canvas { display: block; touch-action: none; }

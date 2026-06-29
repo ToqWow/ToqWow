@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Padre {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  plan         Plan      @default(FREE)
+  planVence    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  perfiles     Perfil[]
+  compras      Compra[]
+}
+
+model Perfil {
+  id        String     @id @default(cuid())
+  padreId   String
+  padre     Padre      @relation(fields: [padreId], references: [id], onDelete: Cascade)
+  nombre    String
+  avatar    Json       @default("{}")
+  edadAnios Int?
+  progreso  Progreso[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Progreso {
+  id             String   @id @default(cuid())
+  perfilId       String
+  perfil         Perfil   @relation(fields: [perfilId], references: [id], onDelete: Cascade)
+  mundoId        Int
+  visitado       Boolean  @default(false)
+  fusionesDesc   String[]
+  easterEggsDesc String[]
+  tiempoTotal    Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@unique([perfilId, mundoId])
+}
+
+model Compra {
+  id            String     @id @default(cuid())
+  padreId       String
+  padre         Padre      @relation(fields: [padreId], references: [id])
+  tipo          TipoCompra
+  packId        String?
+  monto         Decimal
+  moneda        String     @default("USD")
+  plataforma    Plataforma
+  transaccionId String     @unique
+  validadoEn    DateTime?
+  createdAt     DateTime   @default(now())
+}
+
+enum Plan       { FREE PREMIUM }
+enum TipoCompra { SUSCRIPCION_ANUAL PACK_INDIVIDUAL }
+enum Plataforma { PADDLE PAGOPAR APPLE GOOGLE }

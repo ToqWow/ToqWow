@@ -1,0 +1,14 @@
+{
+  "name": "toqwow",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*", "backend"],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": {
+    "turbo": "^1.13.0",
+    "typescript": "^5.4.0"
+  }
+}
