@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 let AC: AudioContext | null = null;
-const ac = () => { if (!AC) AC = new ((window as any).AudioContext || (window as any).webkitAudioContext)(); return AC; };
+const ac = (): AudioContext => { if (!AC) AC = new ((window as any).AudioContext || (window as any).webkitAudioContext)(); return AC!; };
 const note = (f: number, d = 0.3, v = 0.2, t: OscillatorType = 'sine') => { try { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.connect(g); g.connect(c.destination); o.type = t; o.frequency.value = f; g.gain.setValueAtTime(v, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + d); o.start(); o.stop(c.currentTime + d); } catch {} };
 const melody = (fs: number[], gap = 90) => fs.forEach((f, i) => setTimeout(() => note(f, 0.35, 0.18), i * gap));
 const vib = (p: number | number[]) => { try { (navigator as any).vibrate?.(p); } catch {} };
