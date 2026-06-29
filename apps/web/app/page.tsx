@@ -6,12 +6,14 @@ import { useRouter } from 'next/navigation';
 const COLS = ['#B8A9FF','#00D4C8','#FFD700','#FFB3D1','#A8EDEA','#87CEEB'];
 
 const MUNDOS = [
-  { id:0, emoji:'🌍', nombre:'Planeta Tiqui', free:true,  color:'#00D4C8', glow:'rgba(0,212,200,.7)' },
-  { id:1, emoji:'🦕', nombre:'Dinos del Espacio', free:false, color:'#7C6AE8', glow:'rgba(124,106,232,.7)' },
-  { id:2, emoji:'🌲', nombre:'Bosque Encantado', free:false, color:'#2ecc71', glow:'rgba(46,204,113,.7)' },
-  { id:3, emoji:'☁️', nombre:'Ciudad de Nubes', free:false, color:'#87CEEB', glow:'rgba(135,206,235,.7)' },
-  { id:4, emoji:'🐠', nombre:'Océano de Cristal', free:false, color:'#0088cc', glow:'rgba(0,136,204,.7)' },
-  { id:5, emoji:'⚽', nombre:'Deportes Cósmicos', free:false, color:'#f39c12', glow:'rgba(243,156,18,.7)' },
+  { id:0,  emoji:'🌍', nombre:'Planeta Tiqui',     free:true,  color:'#00D4C8', glow:'rgba(0,212,200,.7)',   desc:'Explora el espacio' },
+  { id:1,  emoji:'🦕', nombre:'Dinos del Espacio',  free:true,  color:'#7CFC00', glow:'rgba(124,252,0,.7)',   desc:'¡Ruge con ellos!' },
+  { id:2,  emoji:'🌲', nombre:'Bosque Encantado',   free:true,  color:'#98FB98', glow:'rgba(152,251,152,.7)', desc:'Criaturas mágicas' },
+  { id:3,  emoji:'☁️', nombre:'Ciudad de Nubes',    free:false, color:'#87CEEB', glow:'rgba(135,206,235,.7)', desc:'Pack 3 · $3.99' },
+  { id:4,  emoji:'🐠', nombre:'Océano de Cristal',  free:false, color:'#0088cc', glow:'rgba(0,136,204,.7)',   desc:'Pack 4 · $3.99' },
+  { id:5,  emoji:'⚽', nombre:'Deportes Cósmicos',  free:false, color:'#f39c12', glow:'rgba(243,156,18,.7)',  desc:'Pack 5 · $3.99' },
+  { id:6,  emoji:'🏕️', nombre:'Granja Mágica',      free:false, color:'#FF8C00', glow:'rgba(255,140,0,.7)',   desc:'Pack 6 · $3.99' },
+  { id:7,  emoji:'🔧', nombre:'Taller de Inventos', free:false, color:'#C0C0C0', glow:'rgba(192,192,192,.7)', desc:'Pack 7 · $3.99' },
 ];
 
 const r = (a:number,b:number) => a + Math.random()*(b-a);
@@ -19,7 +21,7 @@ const r = (a:number,b:number) => a + Math.random()*(b-a);
 export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [hovered, setHovered] = useState<number|null>(null);
-  const [toqwowScale, setToqwowScale] = useState(1);
+  const [tqScale, setTqScale] = useState(1);
   const router = useRouter();
 
   useEffect(() => { setMounted(true); }, []);
@@ -31,124 +33,98 @@ export default function Home() {
       background:'linear-gradient(175deg,#0a0835 0%,#1a1270 28%,#0d5fa0 62%,#00b8a8 100%)',
       display:'flex', flexDirection:'column', alignItems:'center',
       overflow:'hidden', position:'relative', fontFamily:'system-ui,sans-serif',
-      paddingBottom:40,
+      paddingBottom:48,
     }}>
 
-      {/* Estrellitas */}
-      {Array.from({length:60}).map((_,i) => (
+      {/* Estrellitas fijas */}
+      {Array.from({length:70}).map((_,i) => (
         <div key={i} style={{
           position:'fixed', borderRadius:'50%', pointerEvents:'none',
-          width: i%6===0?`${r(2,4)}px`:`${r(1,2.5)}px`,
+          width:i%6===0?`${r(2,4)}px`:`${r(1,2.5)}px`,
           height:i%6===0?`${r(2,4)}px`:`${r(1,2.5)}px`,
-          background: i%5===0?COLS[i%6]:'white',
+          background:i%5===0?COLS[i%6]:'white',
           opacity:r(.2,.8), top:`${r(0,100)}%`, left:`${r(0,100)}%`,
           animation:`tw${i%3} ${r(2,5)}s ${r(0,4)}s infinite`,
         }}/>
       ))}
 
-      {/* Mascota + CTA principal */}
-      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:32, marginBottom:8 }}>
+      {/* Hero — Toqwow + CTA */}
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:28, marginBottom:16 }}>
         <div
-          onClick={() => { setToqwowScale(1.15); setTimeout(()=>setToqwowScale(1),300); router.push('/mundo/0'); }}
-          style={{
-            width:'min(200px,40vw)', cursor:'pointer', zIndex:10,
+          onClick={() => { setTqScale(1.15); setTimeout(()=>setTqScale(1),300); router.push('/mundo/0'); }}
+          style={{ width:'min(190px,38vw)', cursor:'pointer', zIndex:10,
             filter:'drop-shadow(0 0 28px rgba(184,169,255,.85))',
-            transform:`scale(${toqwowScale})`,
-            animation:'tFloat 3.2s ease-in-out infinite',
-            transition:'transform .2s,filter .2s',
-          }}
+            transform:`scale(${tqScale})`,
+            animation:'tFloat 3.2s ease-in-out infinite', transition:'transform .2s,filter .2s' }}
           onMouseEnter={e=>(e.currentTarget.style.filter='drop-shadow(0 0 44px rgba(184,169,255,1))')}
           onMouseLeave={e=>(e.currentTarget.style.filter='drop-shadow(0 0 28px rgba(184,169,255,.85))')}
         >
-          <Image src="/toqwow-mascota.png" alt="Toqwow" width={200} height={250}
+          <Image src="/toqwow-mascota.png" alt="Toqwow" width={190} height={240}
             style={{objectFit:'contain',width:'100%',height:'auto',mixBlendMode:'screen'}} priority/>
         </div>
 
-        {/* Botón Jugar Ahora */}
-        <button
-          onClick={() => router.push('/mundo/0')}
-          style={{
-            marginTop:8, background:'linear-gradient(135deg,#B8A9FF,#7C6AE8)',
-            border:'none', borderRadius:50, padding:'16px 44px',
-            fontSize:20, fontWeight:800, color:'white', cursor:'pointer',
+        <button onClick={() => router.push('/mundo/0')}
+          style={{ marginTop:6, background:'linear-gradient(135deg,#B8A9FF,#7C6AE8)',
+            border:'none', borderRadius:50, padding:'15px 42px',
+            fontSize:19, fontWeight:800, color:'white', cursor:'pointer',
             boxShadow:'0 0 32px rgba(184,169,255,.7)', letterSpacing:.5,
-            animation:'pulseBtn 2s ease-in-out infinite',
-          }}
-        >
+            animation:'pulseBtn 2s ease-in-out infinite' }}>
           🚀 ¡Jugar ahora!
         </button>
-        <p style={{fontSize:12,color:'rgba(255,255,255,.4)',marginTop:8}}>Gratis — Planeta Tiqui</p>
+        <p style={{fontSize:12,color:'rgba(255,255,255,.38)',marginTop:6}}>3 mundos gratuitos disponibles</p>
       </div>
 
-      {/* Título sección mundos */}
-      <div style={{width:'100%',textAlign:'center',marginBottom:16,zIndex:5}}>
-        <p style={{fontSize:14,color:'rgba(255,255,255,.5)',letterSpacing:3,textTransform:'uppercase'}}>
-          Sistema Tiqui — 366 Mundos
+      {/* Sección mundos */}
+      <div style={{width:'100%',textAlign:'center',marginBottom:14,zIndex:5}}>
+        <p style={{fontSize:13,color:'rgba(255,255,255,.45)',letterSpacing:3,textTransform:'uppercase'}}>
+          🌌 Sistema Tiqui — 366 Mundos
         </p>
       </div>
 
-      {/* Grid de mundos */}
-      <div style={{
-        display:'grid',
-        gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',
-        gap:14, width:'min(92vw,520px)', zIndex:5,
-      }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(148px,1fr))',
+        gap:12, width:'min(94vw,560px)', zIndex:5 }}>
         {MUNDOS.map(m => (
-          <div
-            key={m.id}
+          <div key={m.id}
             onClick={() => m.free ? router.push(`/mundo/${m.id}`) : null}
             onMouseEnter={() => setHovered(m.id)}
             onMouseLeave={() => setHovered(null)}
             style={{
-              background: hovered===m.id
-                ? `rgba(255,255,255,.12)`
-                : `rgba(255,255,255,.07)`,
-              border: m.free
-                ? `2px solid ${m.color}`
-                : `1px solid rgba(255,255,255,.12)`,
-              borderRadius:20, padding:'18px 12px', textAlign:'center',
-              cursor: m.free ? 'pointer' : 'default',
-              transition:'all .2s',
-              transform: hovered===m.id&&m.free ? 'scale(1.05)' : 'scale(1)',
-              boxShadow: m.free ? `0 0 20px ${m.glow}` : 'none',
+              background: hovered===m.id&&m.free ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.07)',
+              border: m.free ? `2px solid ${m.color}` : '1px solid rgba(255,255,255,.1)',
+              borderRadius:20, padding:'16px 10px', textAlign:'center',
+              cursor: m.free ? 'pointer' : 'default', transition:'all .2s',
+              transform: hovered===m.id&&m.free ? 'scale(1.06)' : 'scale(1)',
+              boxShadow: m.free ? `0 0 18px ${m.glow}` : 'none',
               position:'relative', overflow:'hidden',
             }}
           >
-            {/* Lock overlay para mundos pagos */}
             {!m.free && (
-              <div style={{
-                position:'absolute',inset:0,borderRadius:20,
-                background:'rgba(0,0,0,.35)',
-                display:'flex',alignItems:'center',justifyContent:'center',
-                backdropFilter:'blur(2px)',zIndex:2,
-              }}>
-                <span style={{fontSize:22}}>🔒</span>
+              <div style={{ position:'absolute',inset:0,borderRadius:20,
+                background:'rgba(0,0,0,.38)',display:'flex',flexDirection:'column',
+                alignItems:'center',justifyContent:'center',backdropFilter:'blur(2px)',zIndex:2 }}>
+                <span style={{fontSize:24}}>🔒</span>
+                <span style={{fontSize:11,color:'rgba(255,255,255,.5)',marginTop:4}}>{m.desc}</span>
               </div>
             )}
-            <div style={{fontSize:38,marginBottom:6}}>{m.emoji}</div>
-            <div style={{
-              fontSize:13,fontWeight:700,
-              color: m.free ? m.color : 'rgba(255,255,255,.5)',
-              lineHeight:1.3,
-            }}>{m.nombre}</div>
+            <div style={{fontSize:36,marginBottom:6}}>{m.emoji}</div>
+            <div style={{fontSize:13,fontWeight:700,color:m.free?m.color:'rgba(255,255,255,.45)',lineHeight:1.3}}>{m.nombre}</div>
             {m.free && (
-              <div style={{
-                marginTop:8,background:m.color,borderRadius:50,
-                padding:'4px 12px',fontSize:11,fontWeight:700,color:'#fff',
-                display:'inline-block',
-              }}>GRATIS</div>
-            )}
-            {!m.free && (
-              <div style={{marginTop:8,fontSize:11,color:'rgba(255,255,255,.3)'}}>
-                Pack {Math.ceil(m.id/28)} · $3.99
+              <div style={{marginTop:8,background:m.color,borderRadius:50,padding:'3px 12px',fontSize:11,fontWeight:700,color:'#000',display:'inline-block',opacity:.9}}>
+                {m.id===0?'GRATIS':'GRATIS'}
               </div>
             )}
           </div>
         ))}
       </div>
 
-      {/* Footer */}
-      <p style={{fontSize:11,opacity:.25,color:'white',marginTop:32,textAlign:'center',zIndex:5}}>
+      {/* Más mundos */}
+      <div style={{marginTop:20,textAlign:'center',zIndex:5}}>
+        <p style={{fontSize:13,color:'rgba(255,255,255,.3)'}}>
+          + 358 mundos más por descubrir 🌟
+        </p>
+      </div>
+
+      <p style={{fontSize:11,opacity:.22,color:'white',marginTop:24,textAlign:'center',zIndex:5,padding:'0 16px'}}>
         © ToqWow · Marca Registrada · Todos los derechos reservados
       </p>
 
