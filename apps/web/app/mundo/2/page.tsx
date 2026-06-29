@@ -20,7 +20,7 @@ const CREATURES = [
   { e: '🌸', nm: 'Flor',      x: 28, y: 55, sz: 58, pts: 2, c: '#FFB7C5', snd: () => osc(660, 0.4, 0.2), vb: 18, magic: false },
   { e: '🦝', nm: 'Mapache',   x: 88, y: 42, sz: 60, pts: 3, c: '#808080', snd: () => { osc(250, 0.4, 0.26, 'triangle'); setTimeout(() => osc(200, 0.3, 0.18), 180); }, vb: 35, magic: false },
   { e: '🌺', nm: 'Rosa',      x: 50, y: 62, sz: 54, pts: 2, c: '#FF6B81', snd: () => osc(740, 0.4, 0.2), vb: 16, magic: false },
-  { e: '🐝', nm: 'Abeja',     x: 14, y: 28, sz: 52, pts: 2, c: '#FFD700', snd: () => { osc(220, 0.3, 0.2); osc(280, 0.3, 0.15, 'sine', 10); }, vb: 20, magic: false },
+  { e: '🐝', nm: 'Abeja',     x: 14, y: 28, sz: 52, pts: 2, c: '#FFD700', snd: () => { osc(220, 0.3, 0.2); osc(280, 0.3, 0.15, 'sine'); }, vb: 20, magic: false },
   { e: '🦚', nm: 'Pavo Real', x: 4,  y: 58, sz: 66, pts: 5, c: '#00CED1', snd: () => chord([440, 550, 660, 880, 1100], 80, 0.55, 0.2), vb: [45, 25, 45], magic: true },
   { e: '🍀', nm: 'Trébol',    x: 36, y: 36, sz: 50, pts: 2, c: '#32CD32', snd: () => osc(528, 0.35, 0.2), vb: 14, magic: false },
   { e: '🌻', nm: 'Girasol',   x: 82, y: 12, sz: 60, pts: 3, c: '#FFD700', snd: () => { osc(440, 0.4, 0.24); setTimeout(() => osc(550, 0.3, 0.16), 150); }, vb: 25, magic: false },
