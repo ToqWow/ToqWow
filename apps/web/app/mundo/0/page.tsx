@@ -195,12 +195,12 @@ export default function Mundo0() {
      brillo, sin palabras, qué tocar). null si todos están bien. */
   const neediest = useMemo(()=>{
     let worst:{id:number,need:Need,val:number}|null = null;
-    citizens.forEach(c=>{
-      if(c.isMascot) return;
-      (Object.entries(c.needs) as [Need,number][]).forEach(([k,v])=>{
-        if(v<45 && (!worst || v<worst.val)) worst = {id:c.id,need:k,val:v};
-      });
-    });
+    for (const c of citizens) {
+      if (c.isMascot) continue;
+      for (const [k,v] of Object.entries(c.needs) as [Need,number][]) {
+        if (v<45 && (!worst || v<worst.val)) worst = {id:c.id,need:k,val:v};
+      }
+    }
     return worst;
   },[citizens]);
 
@@ -410,7 +410,7 @@ export default function Mundo0() {
 
           {citizens.map(ch=>{
             const showBubble = ch.bubbleTimer>Date.now();
-            const critNeed = !ch.isMascot && (Object.entries(ch.needs) as [Need,number][]).find(([,v])=>v<25);
+            const critNeed = ch.isMascot ? undefined : (Object.entries(ch.needs) as [Need,number][]).find(([,v])=>v<25);
             const isGuide = !!neediest && neediest.id===ch.id;
             return (
               <div key={ch.id} style={{position:'absolute',left:`${ch.x}%`,top:`${ch.y}%`,zIndex:ch.dragging?90:ch.zIndex,touchAction:'none'}}>
