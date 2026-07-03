@@ -1,5 +1,85 @@
 # ToqWow — CLAUDE.md (Documento de Sesión del Proyecto)
 
+> ⚠️ **Este documento tiene dos partes.** La sección de abajo, "ESTADO REAL DE
+> IMPLEMENTACIÓN", refleja lo que de verdad existe en el repo hoy y es la que
+> hay que leer primero al retomar sesión. Todo lo que sigue después (Identidad
+> del proyecto, Stack tecnológico, Arquitectura de carga, Prisma, agentes IA,
+> panel admin, etc.) es el **documento de visión/roadmap original**, escrito
+> antes de empezar a codear. Varias decisiones ahí (PixiJS, Zustand, Capacitor,
+> Prisma, 27 idiomas desde día 1) todavía NO están implementadas — el desarrollo
+> real tomó un camino más simple (React/Next.js puro, sin motor de juego
+> separado) para poder iterar rápido en Mundo 0. Cuando haya conflicto entre
+> las dos secciones, la realidad es la que manda.
+
+---
+
+## 🟢 ESTADO REAL DE IMPLEMENTACIÓN (actualizado 3 julio 2026, commit `fbf8194d`)
+
+### Qué existe hoy
+
+- **Repo:** `ToqWow/ToqWow`, rama `main`. Deploy automático en Vercel (toqwow.com) en cada push. Backend en Render (existe pero Mundo 0 no lo usa todavía — todo el estado del juego vive en memoria del cliente, sin persistencia).
+- **Stack real de Mundo 0:** Next.js 14 (App Router) + React puro, **sin** PixiJS ni Zustand. Todo el juego de Mundo 0 vive en un solo archivo: `apps/web/app/mundo/0/page.tsx` (~650 líneas), con estilos inline (CSS-in-JS por objeto `style={{}}`) y `<style>` con `@keyframes` al final del componente. Assets de imagen en `apps/web/public/` (`planeta-tiqui-bg.jpg`, `toqwow-character-full.png`).
+- **Mundo 0 — Planeta Tiqui:** único mundo terminado y jugable. Fondo ilustrado real (generado con OpenArt AI), scroll horizontal a pantalla completa, 9 zonas interactivas (casas, hamaca, pileta, puestos de golosinas, cocina, escenario, garaje de cohete, jardín).
+- **Mundo 1, 2 y 3** (Dinos del Espacio, Bosque Encantado, Casa Galáctica): existen como código pero son la versión **vieja** — SVG/emoji proceduralmente generado, estética "Supersónicos" (ya despojada de referencias directas a la franquicia pero visualmente sigue siendo la versión anterior a la reescritura de Mundo 0). **No** tienen el rediseño sin-texto ni el sistema de progreso/zonas que sí tiene Mundo 0. Están pendientes del mismo tratamiento.
+
+### Personajes actuales (Mundo 0)
+
+7 personajes jugables, todos con sistema de necesidades (hambre/sueño/diversión/baño/amor) salvo ToqWow:
+
+| Nombre | Rol | Apariencia real en el juego |
+|---|---|---|
+| Tizi | niña | emoji 👧🏽 (tono de piel medio) |
+| Coti | niña | emoji 👧🏻 (tono de piel claro) |
+| Zoe | niña | emoji 👧🏻 |
+| Tito | varón | emoji 👦🏻 |
+| Luta | varón | emoji 👦🏾 (tono de piel oscuro) |
+| Copo de Nieve | perrito (pug) | emoji 🐶 — no existe emoji de pug en Unicode |
+| ToqWow | mascota jugable | imagen PNG de cuerpo completo (`toqwow-character-full.png`), **sigue con el fondo azul rectangular sin quitar** |
+
+**Limitación importante y ya comunicada a Jesús:** los emojis no soportan color de ojos (no existe en Unicode) ni texturas de pelo específicas (rulos, castaño claro, etc.) de forma fiable — lo implementado es la mejor aproximación posible (tono de piel + elección de emoji), no lo que Jesús pidió literalmente. La solución real pendiente es generar arte propio de cada personaje con OpenArt (ver sección OpenArt abajo).
+
+### Mecánicas implementadas en Mundo 0
+
+- **Sin pestañas de texto.** Bandeja única abajo: fila de avatares de personajes (tap = selecciona + saluda + desliza el mundo hasta ahí) + fila de stickers (drag-and-drop al mundo). Los objetos (comida/juguetes) ya viven sueltos en el mundo, siempre arrastrables, sin necesitar activar ningún "modo".
+- **Reacción universal:** tocar cualquier personaje en cualquier momento dispara rebote + sonido + globito, sin depender de contexto.
+- **Brillo-guía dorado:** el personaje con la necesidad más urgente y el objeto que la resuelve se iluminan juntos (sin palabras).
+- **Mano tutorial** (👆, solo primera visita, vía `localStorage`, desaparece con el primer toque real).
+- **Sistema de zonas con efecto/sonido/vibración/puntos:** acercar (arrastrar) un personaje a cualquiera de las 9 zonas, o entregarle ahí el objeto correcto, dispara sonido+vibración+partículas+puntos. Primera vez que se descubre una zona = fanfarria grande; repeticiones = chispazo chico. Puntitos de progreso (fila de círculos dorados) arriba, contador de estrellas (⭐+número) junto al título.
+- **Mundo completo → pasar al siguiente:** al descubrir las 9 zonas se dispara una celebración (🏆✨🎉) con un botón único (flecha ➡️, sin texto) que navega a `/mundo/1`. Después de la primera vez queda un botón flotante permanente (guardado en `localStorage` como `tq_m0_world_complete`) para ir al siguiente mundo cuando quieran.
+- **Personalización:** ropa (28 opciones: básicas + uniformes de oficios + disfraces) y sombreros/accesorios de cabeza (23 opciones: sombreros, vinchas/moños, orejitas y cosas "wow" como cuerno de unicornio o antenitas alien). Proporciones ajustadas (se superponen sobre cabeza/cuerpo en vez de flotar separados con hueco). ToqWow no es personalizable (personaje fijo).
+
+### Bugs reales ya resueltos en esta sesión (para no repetirlos)
+
+1. **Scroll horizontal no llegaba al borde izquierdo en vertical:** causado por `justifyContent:'center'` en el contenedor de scroll (la mitad izquierda del contenido caía en `scrollLeft` negativo, inalcanzable). Se sacó ese `justifyContent`.
+2. **Botones tapados/no clickeables (Objetos, Decorar, etc. en la versión vieja con pestañas):** los personajes/objetos del mundo tenían z-index más alto que las barras UI, y el contenedor del mundo no tenía `isolation:'isolate'`, así que se "filtraban" por encima de los botones. Se agregó `isolation:'isolate'` al contenedor del mundo y se subió el z-index de las barras UI a 300 (modal de personalizar a 400).
+3. **Horizontal cortado por la barra del navegador móvil:** `100vh` no descuenta la UI del navegador en móvil. Se usa una clase `.tq-m0-root{height:100vh;height:100dvh;}` (fallback progresivo).
+4. **Deploys que fallaban silenciosamente en Vercel (Jesús veía la versión vieja sin saber por qué):** dos builds seguidos fallaron por errores de TypeScript en modo `strict` que no rompen nada en tiempo de ejecución pero sí bloquean `next build`. Causa raíz: patrones `let x: T|null = null; algo.forEach(...) => { x = {...} }` — TypeScript **no propaga el tipo asignado dentro de un closure/forEach** hacia el `return` de la función contenedora en modo estricto, así que el tipo inferido colapsa a `null`/`never` en vez de `T|null`. **Regla para el futuro: usar `for...of` en vez de `.forEach()` cuando se reasigna una variable `let` tipada como unión con `null` dentro del loop** — con `for...of` sí se narrows correctamente. También evitar `!!variable && variable.propiedad` (el `!!` rompe el narrowing de TypeScript); usar `variable && variable.propiedad` o `if(variable){...}` directo.
+   **Antes de dar por bueno un push, correr localmente:** `npx tsc --noEmit` con el `tsconfig.json` real del proyecto (`strict:true`), no solo `esbuild` (esbuild transpila pero no chequea tipos, por eso los errores pasaban desapercibidos localmente).
+5. **Intento de quitar el fondo azul de ToqWow con `rembg` (IA) falló:** el entorno de este Claude tiene la red restringida a una lista blanca de dominios, y el modelo `u2net.onnx` se descarga desde `release-assets.githubusercontent.com`, que NO está permitido (solo `github.com`, `raw.githubusercontent.com`, `codeload.github.com`). El intento manual de reemplazo (flood-fill de color por BFS) cortó brazos y antenas — descartado. **Pendiente:** pedirle fondo transparente directamente a OpenArt al regenerar la imagen, o usar su herramienta de "remove background" integrada.
+
+### OpenArt AI — plan de generación de imágenes (pendiente de ejecutar)
+
+Jesús va a pagar el plan **Essential** de OpenArt (~4,000 créditos/mes, ~$12-14/mes según región). Ya se le explicó:
+- Los créditos no acumulan mes a mes — hay que generar todo dentro de la ventana de 30 días.
+- Usar resolución/calidad **estándar** (1 crédito/imagen) para que las 4,000 imágenes alcancen para los 4 mundos de 366 días combinados; alta calidad consume 2-4 créditos y no va a alcanzar.
+- Prompts para Bulk Create (hasta 500 por tanda, sube `.csv`/`.txt`) ya se generaron una vez para los 366 mundos (`toqwow_openart_prompts.json`, `toqwow_prompts_bulk.csv/.txt` — no se sabe si Jesús los conserva, revisar antes de regenerar) con cláusula de originalidad (prohíbe imitar Toca Boca/Avatar World, traduce inspiración cinematográfica genérica sin nombrar franquicias).
+- Personaje `@ToqWow` ya entrenado como Consistent Character en la cuenta de OpenArt de Jesús.
+
+**Próximo paso acordado con Jesús (todavía no ejecutado):** generar 7 retratos de personajes (Tizi, Coti, Zoe, Tito, Luta, Copo de Nieve, ToqWow con fondo transparente) con las características exactas que describió — ojos, pelo, tono de piel — usando arte real en vez de emoji. Después, los fondos de los 4 mundos (366 días). Falta:
+1. Confirmar si Jesús ya activó el pago (quedó en avisar).
+2. Escribir los 7 prompts de personajes con descripciones exactas (ojos/pelo/piel) + la cláusula de originalidad.
+3. Una vez generadas las imágenes, escribir el script de integración que reemplace `ch.emoji` por `ch.img` en `CITIZENS_DEF` para los 6 personajes humanos/perro (mismo patrón que ya se usó para ToqWow).
+
+### Pendientes conocidos (no bugs, features/tareas)
+
+- Aplicar el mismo rediseño sin-texto + sistema de zonas/progreso de Mundo 0 a Mundo 1, 2 y 3.
+- Reemplazar emojis de personajes por arte OpenArt una vez generado.
+- Quitar el fondo azul de ToqWow (regenerar con fondo transparente).
+- Conectar el progreso del juego (zonas visitadas, personajes, stickers) a persistencia real (hoy todo vive en memoria/localStorage del cliente, se pierde entre dispositivos).
+- Todo lo de pagos (Paddle/Pagopar/IAP), backend, panel admin y agentes IA descrito en la sección de visión de abajo sigue sin implementarse — es roadmap, no estado actual.
+
+---
+
 ## Identidad del proyecto
 
 **Nombre:** ToqWow  
