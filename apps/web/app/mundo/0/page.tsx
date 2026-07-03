@@ -164,6 +164,10 @@ export default function Mundo0() {
   const [showZoneDebug, setShowZoneDebug] = useState(false);
   const [dragSticker, setDragSticker] = useState<{emoji:string,sx:number,sy:number}|null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [visitedZones, setVisitedZones] = useState<Set<string>>(()=>new Set());
+  const [stars, setStars] = useState(0);
+  const [showWorldComplete, setShowWorldComplete] = useState(false);
+  const [worldDone, setWorldDone] = useState(false);
 
   const scrollRef    = useRef<HTMLDivElement>(null);
   const contentRef   = useRef<HTMLDivElement>(null); // el "mundo" real, tamaño fijo, con scroll horizontal
@@ -172,6 +176,7 @@ export default function Mundo0() {
   const dragOff      = useRef({x:0,y:0});
   const maxZ         = useRef(50);
   const dragStickerRef = useRef(false);
+  const citizenZoneRef = useRef<Record<number,string|null>>({});
   const needTimer    = useRef<ReturnType<typeof setInterval>|null>(null);
 
   /* Centrar el scroll horizontal al entrar, para que arranque mostrando la
@@ -190,6 +195,47 @@ export default function Mundo0() {
     setShowTutorial(false);
     try{ localStorage.setItem('tq_m0_tutorial_seen','1'); }catch{}
   },[]);
+
+  useEffect(()=>{
+    try{ if(localStorage.getItem('tq_m0_world_complete')) setWorldDone(true); }catch{}
+  },[]);
+
+  /* Marca una zona como "visitada": suma puntitos (más la primera vez),
+     y si ya se recorrieron todas, desbloquea el pase al siguiente mundo. */
+  const markZoneVisited = useCallback((zone:Zone)=>{
+    setVisitedZones(prev=>{
+      if(prev.has(zone.id)){ setStars(s=>s+1); return prev; }
+      const next = new Set(prev); next.add(zone.id);
+      setStars(s=>s+10);
+      if(next.size>=ZONES.length){
+        setShowWorldComplete(true);
+        setWorldDone(true);
+        try{ localStorage.setItem('tq_m0_world_complete','1'); }catch{}
+      }
+      return next;
+    });
+  },[]);
+
+  /* Efecto completo (sonido+vibración+brillitos+puntos) al acercarse a
+     una zona — con objeto o simplemente caminando hasta ahí. Más grande
+     la primera vez que se descubre esa zona. */
+  const triggerZoneEffect = useCallback((zone:Zone, xPct:number, yPct:number)=>{
+    const firstTime = !visitedZones.has(zone.id);
+    if(firstTime) melody([523,659,784,1047,1319],80,0.3,0.2);
+    else note(ri(700,1000),0.15,0.14);
+    vib(firstTime?[30,20,30,20,40]:[20,10,20]);
+    const box = contentRef.current?.getBoundingClientRect();
+    const cx=(box?.left||0)+(xPct/100)*(box?.width||0), cy=(box?.top||0)+(yPct/100)*(box?.height||0);
+    const n = firstTime?14:6;
+    for(let i=0;i<n;i++) setTimeout(()=>{
+      const pe:Particle[]=[{id:uid++,x:cx+r(-24,24),y:cy+r(-24,24),e:firstTime?'✨':'⭐'}];
+      setParticles(p=>[...p,...pe]);
+      setTimeout(()=>setParticles(p=>p.filter(pp=>!pe.find(x=>x.id===pp.id))),800);
+    },i*45);
+    setComboMsg(firstTime?`✨ ¡${zone.name}! ✨`:`⭐ ${zone.name}`);
+    setShowCombo(true); setTimeout(()=>setShowCombo(false),firstTime?2600:1400);
+    markZoneVisited(zone);
+  },[visitedZones,markZoneVisited]);
 
   /* Personaje con la necesidad más urgente ahora mismo (para guiar con
      brillo, sin palabras, qué tocar). null si todos están bien. */
@@ -279,12 +325,13 @@ export default function Mundo0() {
     const target = citizens.find(c=>Math.abs(c.x-p.x)<10&&Math.abs(c.y-p.y)<12);
     const z = zoneAt(p.x,p.y);
     const inRightZone = !!z && z.id===bld.zoneHint;
-    if (target) interact(target.id, bld.action, inRightZone);
-    else if (inRightZone) {
-      note(ri(700,1100),0.2,0.16); vib([20,10,20]);
-      setComboMsg(`✨ ¡${bld.label} en su lugar! ✨`); setShowCombo(true); setTimeout(()=>setShowCombo(false),1800);
+    if (target) {
+      interact(target.id, bld.action, inRightZone);
+      if (inRightZone && z) markZoneVisited(z);
+    } else if (inRightZone && z) {
+      triggerZoneEffect(z, p.x, p.y);
     }
-  },[buildings,citizens,interact,toImgPct,zoneAt]);
+  },[buildings,citizens,interact,toImgPct,zoneAt,markZoneVisited,triggerZoneEffect]);
 
   /* Reacción universal: CUALQUIER toque a un personaje (en cualquier
      momento, sin necesitar ningún "modo") rebota + suena + muestra un
@@ -308,8 +355,16 @@ export default function Mundo0() {
   const onCitMove = useCallback((e:React.PointerEvent,id:number)=>{
     if(draggingId.current!==id)return;
     const p = toImgPct(e.clientX,e.clientY);
-    setCitizens(prev=>prev.map(c=>c.id===id?{...c,x:Math.max(2,Math.min(94,p.x-dragOff.current.x)),y:Math.max(5,Math.min(92,p.y-dragOff.current.y))}:c));
-  },[toImgPct]);
+    const nx = Math.max(2,Math.min(94,p.x-dragOff.current.x));
+    const ny = Math.max(5,Math.min(92,p.y-dragOff.current.y));
+    setCitizens(prev=>prev.map(c=>c.id===id?{...c,x:nx,y:ny}:c));
+    const z = zoneAt(nx,ny);
+    const zid = z?z.id:null;
+    if(citizenZoneRef.current[id]!==zid){
+      citizenZoneRef.current[id]=zid;
+      if(z) triggerZoneEffect(z,nx,ny);
+    }
+  },[toImgPct,zoneAt,triggerZoneEffect]);
   const onCitUp = useCallback((e:React.PointerEvent,id:number)=>{
     if(draggingId.current!==id)return;
     draggingId.current=null;
@@ -524,13 +579,24 @@ export default function Mundo0() {
 
       <div style={{position:'absolute',top:0,left:0,right:0,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 12px',zIndex:300,background:'rgba(0,0,0,.4)',backdropFilter:'blur(10px)'}}>
         <button onClick={()=>router.push('/')} style={{background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',borderRadius:50,padding:'6px 14px',fontSize:12,color:'white',cursor:'pointer'}}>← Inicio</button>
-        <div style={{fontSize:13,fontWeight:700,color:'white'}}>🪐 Planeta Tiqui</div>
+        <div style={{fontSize:13,fontWeight:700,color:'white',display:'flex',alignItems:'center',gap:6}}>🪐 Planeta Tiqui <span style={{fontSize:11,opacity:.8}}>⭐{stars}</span></div>
         <div style={{display:'flex',gap:6}}>
           <button onClick={()=>setShowZoneDebug(v=>!v)} title="Ver zonas (debug)"
             style={{background:showZoneDebug?'rgba(255,0,150,.3)':'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',borderRadius:50,padding:'6px 10px',fontSize:12,color:'white',cursor:'pointer'}}>🔧</button>
           <button onClick={()=>{if(selectedCit!==null&&!citizens[selectedCit]?.isMascot)setShowCustomize(true);}}
             style={{background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',borderRadius:50,padding:'6px 14px',fontSize:12,color:'white',cursor:'pointer',opacity:(selectedCit!==null&&!citizens[selectedCit]?.isMascot)?1:0.4}}>✨</button>
         </div>
+      </div>
+
+      {/* Puntitos de progreso: uno por cada rincón del mundo (casas,
+          hamaca, puesto de golosinas, etc). Se iluminan al descubrirlos.
+          Sin números ni palabras — solo relleno visual. */}
+      <div style={{position:'absolute',top:42,left:0,right:0,display:'flex',justifyContent:'center',gap:4,zIndex:299,pointerEvents:'none'}}>
+        {ZONES.map(z=>(
+          <div key={z.id} style={{width:7,height:7,borderRadius:'50%',
+            background:visitedZones.has(z.id)?'gold':'rgba(255,255,255,.25)',
+            boxShadow:visitedZones.has(z.id)?'0 0 6px gold':'none',transition:'all .3s'}}/>
+        ))}
       </div>
 
       <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:300,background:'rgba(2,4,20,.94)',backdropFilter:'blur(16px)',borderTop:'1px solid rgba(255,255,255,.1)',padding:'8px 12px calc(10px + env(safe-area-inset-bottom))'}}>
@@ -583,6 +649,32 @@ export default function Mundo0() {
       {dragSticker&&(
         <div style={{position:'fixed',left:dragSticker.sx,top:dragSticker.sy,transform:'translate(-50%,-50%)',
           fontSize:40,pointerEvents:'none',zIndex:500,filter:'drop-shadow(0 4px 10px rgba(0,0,0,.4))'}}>{dragSticker.emoji}</div>
+      )}
+
+      {/* Mundo completo: se descubrieron las 9 zonas. Fiesta grande y un
+          único botón sin texto (una flecha) para pasar al Mundo 1. */}
+      {showWorldComplete&&(
+        <div onClick={()=>setShowWorldComplete(false)}
+          style={{position:'absolute',inset:0,zIndex:450,display:'flex',alignItems:'center',justifyContent:'center',
+            background:'rgba(10,5,30,.75)',backdropFilter:'blur(10px)'}}>
+          <div style={{textAlign:'center',animation:'comboIn .5s ease-out'}}>
+            <div style={{fontSize:70,marginBottom:14,animation:'tqHappy .5s ease-in-out 4'}}>🏆✨🎉</div>
+            <button onClick={e=>{e.stopPropagation();router.push('/mundo/1');}}
+              style={{fontSize:42,width:104,height:104,borderRadius:'50%',border:'none',cursor:'pointer',
+                background:'linear-gradient(135deg,#B8A9FF,#FF9ECF)',boxShadow:'0 10px 34px rgba(184,169,255,.6)',
+                animation:'tqFloat 2s ease-in-out infinite'}}>➡️</button>
+          </div>
+        </div>
+      )}
+
+      {/* Botón flotante permanente una vez desbloqueado el pase, para
+          poder ir al siguiente mundo cuando quiera sin forzar la salida. */}
+      {worldDone&&!showWorldComplete&&(
+        <button onClick={()=>router.push('/mundo/1')} title="Siguiente mundo"
+          style={{position:'absolute',right:14,bottom:150,zIndex:290,
+            fontSize:24,width:52,height:52,borderRadius:'50%',border:'none',cursor:'pointer',
+            background:'linear-gradient(135deg,#B8A9FF,#FF9ECF)',boxShadow:'0 6px 20px rgba(184,169,255,.5)',
+            animation:'tqFloat 2.5s ease-in-out infinite'}}>➡️</button>
       )}
 
       <style>{`
