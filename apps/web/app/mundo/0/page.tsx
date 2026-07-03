@@ -301,8 +301,8 @@ export default function Mundo0() {
   },[tab,toImgPct]);
 
   return (
-    <div ref={worldRef}
-      style={{width:'100vw',height:'100vh',overflow:'hidden',position:'relative',fontFamily:'system-ui,sans-serif',background:'#1a1040'}}>
+    <div ref={worldRef} className="tq-m0-root"
+      style={{width:'100vw',overflow:'hidden',position:'relative',fontFamily:'system-ui,sans-serif',background:'#1a1040'}}>
 
       {/* Contenedor con scroll horizontal: el mundo se ve a tamaño completo
           (altura de pantalla) y se desliza de lado a lado para explorarlo,
@@ -310,9 +310,9 @@ export default function Mundo0() {
           causaba que todo apareciera amontonado en una franja chiquita). */}
       <div ref={scrollRef}
         style={{position:'absolute',inset:0,overflowX:'auto',overflowY:'hidden',
-          display:'flex',justifyContent:'center',WebkitOverflowScrolling:'touch'}}>
+          display:'flex',WebkitOverflowScrolling:'touch'}}>
         <div ref={contentRef} onPointerDown={onWorldTap}
-          style={{position:'relative',height:'100%',aspectRatio:`${IMG_W} / ${IMG_H}`,flexShrink:0,touchAction:'pan-x'}}>
+          style={{position:'relative',height:'100%',aspectRatio:`${IMG_W} / ${IMG_H}`,flexShrink:0,touchAction:'pan-x',isolation:'isolate'}}>
 
           <img src="/planeta-tiqui-bg.jpg" alt="Planeta Tiqui" draggable={false}
             style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'fill',pointerEvents:'none',zIndex:0}}/>
@@ -377,7 +377,7 @@ export default function Mundo0() {
                   onPointerDown={e=>{onCitDown(e,ch.id);setSelectedCit(ch.id);}}
                   onPointerMove={e=>onCitMove(e,ch.id)}
                   onPointerUp={e=>onCitUp(e,ch.id)}
-                  style={{cursor:ch.dragging?'grabbing':'grab',userSelect:'none',
+                  style={{cursor:ch.dragging?'grabbing':'grab',userSelect:'none',touchAction:'none',
                     display:'flex',flexDirection:'column',alignItems:'center',
                     transform:`scale(${ch.scale})`,transition:'transform .2s',
                     filter:`drop-shadow(0 0 ${ch.dragging?20:10}px ${ch.color})`,
@@ -423,7 +423,7 @@ export default function Mundo0() {
       )}
 
       {showCustomize&&selectedCit!==null&&(
-        <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.82)',zIndex:195,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(8px)'}}>
+        <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.82)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(8px)'}}>
           <div style={{background:'rgba(10,5,30,.96)',borderRadius:24,padding:20,maxWidth:340,width:'90%',border:`1.5px solid ${citizens[selectedCit]?.color||'#B8A9FF'}44`}}>
             <div style={{fontSize:16,fontWeight:800,color:'white',marginBottom:12,textAlign:'center'}}>✨ Personalizar {citizens[selectedCit]?.name}</div>
             {(['hair','suit','acc'] as const).map(attr=>(
@@ -446,7 +446,7 @@ export default function Mundo0() {
         </div>
       )}
 
-      <div style={{position:'absolute',top:0,left:0,right:0,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 12px',zIndex:60,background:'rgba(0,0,0,.4)',backdropFilter:'blur(10px)'}}>
+      <div style={{position:'absolute',top:0,left:0,right:0,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 12px',zIndex:300,background:'rgba(0,0,0,.4)',backdropFilter:'blur(10px)'}}>
         <button onClick={()=>router.push('/')} style={{background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',borderRadius:50,padding:'6px 14px',fontSize:12,color:'white',cursor:'pointer'}}>← Inicio</button>
         <div style={{fontSize:13,fontWeight:700,color:'white'}}>🪐 Planeta Tiqui</div>
         <div style={{display:'flex',gap:6}}>
@@ -456,7 +456,7 @@ export default function Mundo0() {
         </div>
       </div>
 
-      <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:60,background:'rgba(2,4,20,.94)',backdropFilter:'blur(16px)',borderTop:'1px solid rgba(255,255,255,.1)',padding:'8px 12px calc(12px + env(safe-area-inset-bottom))'}}>
+      <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:300,background:'rgba(2,4,20,.94)',backdropFilter:'blur(16px)',borderTop:'1px solid rgba(255,255,255,.1)',padding:'8px 12px calc(12px + env(safe-area-inset-bottom))'}}>
         <div style={{display:'flex',justifyContent:'center',gap:5,marginBottom:8}}>
           {[
             {id:'citizens',icon:'👨‍👩‍👧‍👦',label:'Personas'},
@@ -515,6 +515,7 @@ export default function Mundo0() {
       </div>
 
       <style>{`
+        .tq-m0-root{height:100vh;height:100dvh;}
         @keyframes tqFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
         @keyframes tqHappy{0%{transform:scale(1) rotate(0)}33%{transform:scale(1.22) rotate(10deg)}66%{transform:scale(1.22) rotate(-10deg)}100%{transform:scale(1) rotate(0)}}
         @keyframes tqDance{0%{transform:rotate(-14deg) scale(1.15)}100%{transform:rotate(14deg) scale(1.15)}}
