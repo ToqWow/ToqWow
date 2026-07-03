@@ -40,13 +40,25 @@ const CITIZENS_DEF = [
   {name:'Tizi',   emoji:'👧', color:'#FF6B9D'},
   {name:'Coti',   emoji:'👦', color:'#7CFC00'},
   {name:'Zoe',    emoji:'👩', color:'#C77DFF'},
-  {name:'Nano',   emoji:'🧑', color:'#4D96FF'},
-  {name:'Tico',   emoji:'🐕', color:'#DEB887'},
+  {name:'Luta',   emoji:'🧑', color:'#4D96FF'},
+  {name:'Tito',   emoji:'🐕', color:'#DEB887'},
   {name:'ToqWow', img:'/toqwow-character-full.png', color:'#B8A9FF', isMascot:true},
 ];
 const HAIR_OPTS  = ['👱','🧑‍🦱','👩‍🦰','🧑‍🦲','👩‍🦳','🧑','👱‍♀️','🧑‍🦱'];
-const SUIT_OPTS  = ['🥼','👔','👗','🧥','👕','🎽','🦺','👘'];
-const ACC_OPTS   = ['🎩','👑','🌸','⭐','🎀','🕶️','🌙','💫'];
+/* Ropa: remeras simples + uniformes de oficios + disfraces — pensado para
+   que el chico arme "quiero ser bombero", "quiero ser sirena", etc. */
+const SUIT_OPTS  = [
+  '👕','👔','👗','🧥','🎽','🦺','👘','🥋','🩱','🥻',       // ropa básica
+  '🧑‍⚕️','🧑‍🚀','🧑‍🍳','🧑‍🚒','🧑‍🌾','🧑‍🔬','🧑‍✈️','🧑‍🎨','👮','🥼', // oficios
+  '🦸','🧙','🧚','🧜‍♀️','🥷','👸','🤴','🕵️',              // disfraces
+];
+/* Sombreros/gorros/vinchas + cositas "wow" (orejitas, cuernos, antenas
+   al estilo ToqWow) — todo elegible sin necesitar leer una palabra. */
+const ACC_OPTS   = [
+  '🎩','👑','🧢','🎓','🪖','⛑️','👒',       // sombreros/cascos
+  '🎀','🌸','⭐','💫','🌈','🍀','🎗️','🧣',   // vinchas/moños
+  '🐰','🐻','🦄','👽','🎭','🕶️','🌙','🦋',   // orejitas y cosas geniales
+];
 
 const NEED_ICONS:  Record<Need,string> = {hunger:'🍕',sleep:'💤',fun:'🎮',bath:'🛁',love:'💖'};
 const NEED_LABEL:  Record<Need,string> = {hunger:'Hambre',sleep:'Sueño',fun:'Diversión',bath:'Baño',love:'Amor'};
@@ -444,9 +456,9 @@ export default function Mundo0() {
                     <img src={ch.img} alt={ch.name} draggable={false}
                       style={{width:'9vh',height:'auto',objectFit:'contain'}}/>
                   ) : (<>
-                    <div style={{fontSize:'1.6vh'}}>{ACC_OPTS[ch.acc]}</div>
-                    <div style={{fontSize:'4.4vh'}}>{ch.emoji}</div>
-                    <div style={{fontSize:'1.5vh',marginTop:-2}}>{SUIT_OPTS[ch.suit]}</div>
+                    <div style={{fontSize:'2.6vh',marginBottom:'-1.3vh',position:'relative',zIndex:2}}>{ACC_OPTS[ch.acc]}</div>
+                    <div style={{fontSize:'4.4vh',position:'relative',zIndex:1}}>{ch.emoji}</div>
+                    <div style={{fontSize:'2.6vh',marginTop:'-1.3vh',position:'relative',zIndex:2}}>{SUIT_OPTS[ch.suit]}</div>
                   </>)}
                   <div style={{fontSize:'1.4vh',fontWeight:700,color:'white',textShadow:'0 1px 4px rgba(0,0,0,.8)',
                     background:`${ch.color}44`,borderRadius:8,padding:'1px 6px',marginTop:2,whiteSpace:'nowrap'}}>{ch.name}</div>
