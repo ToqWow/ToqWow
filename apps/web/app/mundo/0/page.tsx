@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 
 /* ══ AUDIO ENGINE ══ */
@@ -19,7 +19,7 @@ type Need  = 'hunger'|'sleep'|'fun'|'bath'|'love';
 type Mood  = 'happy'|'neutral'|'excited'|'sleepy'|'sad';
 
 interface Citizen {
-  id:number; name:string; emoji:string; color:string;
+  id:number; name:string; emoji?:string; img?:string; color:string; isMascot?:boolean;
   x:number; y:number; zIndex:number; // x/y en % DE LA IMAGEN, no del viewport
   needs:Record<Need,number>; mood:Mood;
   bubble:string; bubbleTimer:number;
@@ -35,13 +35,14 @@ interface BuildingItem {
 type Sticker  = {id:number; emoji:string; x:number; y:number; sz:number; rotation:number;};
 type Particle = {id:number; x:number; y:number; e:string;};
 
-/* ══ PERSONAJES ORIGINALES DE PLANETA TIQUI (sin relación a ninguna franquicia) ══ */
+/* ══ PERSONAJES DE PLANETA TIQUI (sin relación a ninguna franquicia) ══ */
 const CITIZENS_DEF = [
-  {name:'Tico', emoji:'🧑', color:'#4D96FF'},
-  {name:'Mimi', emoji:'👩', color:'#FF6B9D'},
-  {name:'Bibi', emoji:'👧', color:'#C77DFF'},
-  {name:'Nano', emoji:'👦', color:'#7CFC00'},
-  {name:'Cometa', emoji:'🐕', color:'#DEB887'},
+  {name:'Tizi',   emoji:'👧', color:'#FF6B9D'},
+  {name:'Coti',   emoji:'👦', color:'#7CFC00'},
+  {name:'Zoe',    emoji:'👩', color:'#C77DFF'},
+  {name:'Nano',   emoji:'🧑', color:'#4D96FF'},
+  {name:'Tico',   emoji:'🐕', color:'#DEB887'},
+  {name:'ToqWow', img:'/toqwow-character-full.png', color:'#B8A9FF', isMascot:true},
 ];
 const HAIR_OPTS  = ['👱','🧑‍🦱','👩‍🦰','🧑‍🦲','👩‍🦳','🧑','👱‍♀️','🧑‍🦱'];
 const SUIT_OPTS  = ['🥼','👔','👗','🧥','👕','🎽','🦺','👘'];
@@ -60,6 +61,8 @@ const MOOD_BUBBLE: Record<Mood,string> = {
   happy:'😊 ¡Feliz!', neutral:'😐 Hmm...', excited:'🤩 ¡Genial!',
   sleepy:'😴 Sueño...', sad:'😢 Necesito algo',
 };
+const GREET_SND = ()=>melody([784,988,1175],70,0.22,0.16);
+const GREET_BUBBLES = ['👋😊','😄✨','🥰','😊💫'];
 function calcMood(n: Record<Need,number>): Mood {
   const avg = Object.values(n).reduce((a,b)=>a+b,0)/5;
   if (n.sleep<20) return 'sleepy';
@@ -118,7 +121,6 @@ const ZONE_ITEMS: {emoji:string;label:string;action:Need;color:string;zoneHint:s
 const STICKERS_SET = ['⭐','🌟','💫','✨','🌈','🦋','🌸','💎','🎈','🪐'];
 
 const IMG_W = 2544, IMG_H = 1456;
-const IMG_ASPECT = IMG_W / IMG_H;
 
 export default function Mundo0() {
   const router = useRouter();
@@ -126,11 +128,11 @@ export default function Mundo0() {
 
   const [citizens, setCitizens]       = useState<Citizen[]>(() =>
     CITIZENS_DEF.map((c,i) => ({
-      id:i, name:c.name, emoji:c.emoji, color:c.color,
-      x:30+i*10, y:70, zIndex:10+i,
+      id:i, name:c.name, emoji:c.emoji, img:c.img, color:c.color, isMascot:c.isMascot,
+      x:10+i*14, y:72, zIndex:10+i,
       needs:{hunger:80,sleep:80,fun:80,bath:80,love:80},
       mood:'happy', bubble:'', bubbleTimer:0,
-      hair:i, suit:i, acc:i%8,
+      hair:i%8, suit:i%8, acc:i%8,
       dragging:false, scale:1,
     }))
   );
@@ -143,15 +145,13 @@ export default function Mundo0() {
   );
   const [particles, setParticles]     = useState<Particle[]>([]);
   const [stickers,  setStickers]      = useState<Sticker[]>([]);
-  const [tab, setTab]                 = useState<'citizens'|'objects'|'decorate'>('citizens');
   const [comboMsg, setComboMsg]       = useState('');
   const [showCombo, setShowCombo]     = useState(false);
-  const [toqwowPos, setToqwowPos]     = useState({x:47,y:50});
-  const [toqwowMood, setToqwowMood]   = useState<'idle'|'happy'|'dance'>('idle');
-  const [draggingTq, setDraggingTq]   = useState(false);
   const [selectedCit, setSelectedCit] = useState<number|null>(null);
   const [showCustomize, setShowCustomize] = useState(false);
   const [showZoneDebug, setShowZoneDebug] = useState(false);
+  const [dragSticker, setDragSticker] = useState<{emoji:string,sx:number,sy:number}|null>(null);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   const scrollRef    = useRef<HTMLDivElement>(null);
   const contentRef   = useRef<HTMLDivElement>(null); // el "mundo" real, tamaño fijo, con scroll horizontal
@@ -159,8 +159,7 @@ export default function Mundo0() {
   const draggingBld  = useRef<number|null>(null);
   const dragOff      = useRef({x:0,y:0});
   const maxZ         = useRef(50);
-  const tqDragging   = useRef(false);
-  const tqOff        = useRef({x:0,y:0});
+  const dragStickerRef = useRef(false);
   const needTimer    = useRef<ReturnType<typeof setInterval>|null>(null);
 
   /* Centrar el scroll horizontal al entrar, para que arranque mostrando la
@@ -169,6 +168,29 @@ export default function Mundo0() {
     const sc = scrollRef.current; if(!sc) return;
     requestAnimationFrame(()=>{ sc.scrollLeft = (sc.scrollWidth - sc.clientWidth)/2; });
   },[]);
+
+  /* Mano tutorial: solo la primera vez que un chico entra al mundo, sin
+     texto — desaparece sola apenas hay un primer toque real. */
+  useEffect(()=>{
+    try{ if(!localStorage.getItem('tq_m0_tutorial_seen')) setShowTutorial(true); }catch{}
+  },[]);
+  const dismissTutorial = useCallback(()=>{
+    setShowTutorial(false);
+    try{ localStorage.setItem('tq_m0_tutorial_seen','1'); }catch{}
+  },[]);
+
+  /* Personaje con la necesidad más urgente ahora mismo (para guiar con
+     brillo, sin palabras, qué tocar). null si todos están bien. */
+  const neediest = useMemo(()=>{
+    let worst:{id:number,need:Need,val:number}|null = null;
+    citizens.forEach(c=>{
+      if(c.isMascot) return;
+      (Object.entries(c.needs) as [Need,number][]).forEach(([k,v])=>{
+        if(v<45 && (!worst || v<worst.val)) worst = {id:c.id,need:k,val:v};
+      });
+    });
+    return worst;
+  },[citizens]);
 
   /* % de la imagen a partir de un punto de pantalla — usa el rectángulo
      real del contenido (contentRef), que el navegador ya calcula solo
@@ -187,6 +209,7 @@ export default function Mundo0() {
   useEffect(()=>{
     needTimer.current = setInterval(()=>{
       setCitizens(prev=>prev.map(ch=>{
+        if(ch.isMascot) return ch;
         const n={...ch.needs};
         n.hunger=Math.max(0,n.hunger-r(0.3,0.7));
         n.sleep =Math.max(0,n.sleep -r(0.2,0.5));
@@ -221,7 +244,6 @@ export default function Mundo0() {
   },[]);
 
   const onBldDown = useCallback((e:React.PointerEvent,id:number)=>{
-    if(tab!=='objects')return;
     e.stopPropagation();(e.target as Element).setPointerCapture(e.pointerId);
     draggingBld.current=id;maxZ.current++;
     const bld=buildings.find(b=>b.id===id)!;
@@ -229,7 +251,7 @@ export default function Mundo0() {
     dragOff.current={x:p.x-bld.x,y:p.y-bld.y};
     setBuildings(prev=>prev.map(b=>b.id===id?{...b,dragging:true,zIndex:maxZ.current,scale:1.25}:b));
     note(ri(300,600),0.1,0.12);vib(12);
-  },[buildings,tab,toImgPct]);
+  },[buildings,toImgPct]);
   const onBldMove = useCallback((e:React.PointerEvent,id:number)=>{
     if(draggingBld.current!==id)return;
     const p = toImgPct(e.clientX,e.clientY);
@@ -252,15 +274,25 @@ export default function Mundo0() {
     }
   },[buildings,citizens,interact,toImgPct,zoneAt]);
 
+  /* Reacción universal: CUALQUIER toque a un personaje (en cualquier
+     momento, sin necesitar ningún "modo") rebota + suena + muestra un
+     globito amistoso. Esto es lo que hace que el juego responda siempre,
+     sin que el chico tenga que entender nada primero. */
+  const greet = useCallback((id:number)=>{
+    setCitizens(prev=>prev.map(c=>c.id===id?{...c,bubble:GREET_BUBBLES[ri(0,GREET_BUBBLES.length)],bubbleTimer:Date.now()+1400}:c));
+    GREET_SND(); vib(15);
+  },[]);
+
   const onCitDown = useCallback((e:React.PointerEvent,id:number)=>{
     e.stopPropagation();(e.target as Element).setPointerCapture(e.pointerId);
+    dismissTutorial();
     draggingId.current=id;maxZ.current++;
     const ch = citizens.find(c=>c.id===id)!;
     const p = toImgPct(e.clientX,e.clientY);
     dragOff.current={x:p.x-ch.x,y:p.y-ch.y};
     setCitizens(prev=>prev.map(c=>c.id===id?{...c,dragging:true,zIndex:maxZ.current,scale:1.15}:c));
-    note(ri(400,700),0.12,0.15);vib(15);
-  },[citizens,toImgPct]);
+    greet(id);
+  },[citizens,toImgPct,greet,dismissTutorial]);
   const onCitMove = useCallback((e:React.PointerEvent,id:number)=>{
     if(draggingId.current!==id)return;
     const p = toImgPct(e.clientX,e.clientY);
@@ -273,35 +305,55 @@ export default function Mundo0() {
     note(ri(300,500),0.15,0.12);vib(10);
   },[]);
 
-  const onTqDown = useCallback((e:React.PointerEvent)=>{
+  /* Tocar el avatar de un personaje en la bandeja de abajo lo selecciona,
+     lo saluda, y desliza el mundo hasta donde está — sin texto, sin
+     pestañas: "tocá la carita, aparece el amigo". */
+  const scrollToCitizen = useCallback((id:number)=>{
+    const ch = citizens.find(c=>c.id===id); if(!ch) return;
+    const sc = scrollRef.current, ct = contentRef.current; if(!sc||!ct) return;
+    const targetLeft = (ch.x/100)*ct.offsetWidth - sc.clientWidth/2;
+    sc.scrollTo({left:Math.max(0,Math.min(sc.scrollWidth-sc.clientWidth,targetLeft)),behavior:'smooth'});
+  },[citizens]);
+  const onTrayCitTap = useCallback((id:number)=>{
+    dismissTutorial();
+    setSelectedCit(id);
+    greet(id);
+    scrollToCitizen(id);
+  },[greet,scrollToCitizen,dismissTutorial]);
+
+  /* Arrastrar un sticker desde la bandeja hasta el mundo — reemplaza el
+     viejo "modo decorar": ahora es la misma acción de drag-and-drop que
+     ya usan los objetos, sin necesitar activar nada antes. */
+  const onStickerTrayDown = useCallback((e:React.PointerEvent, emoji:string)=>{
     e.stopPropagation();(e.target as Element).setPointerCapture(e.pointerId);
-    tqDragging.current=true;setDraggingTq(true);
-    const p = toImgPct(e.clientX,e.clientY);
-    tqOff.current={x:p.x-toqwowPos.x,y:p.y-toqwowPos.y};
-    melody([523,659,784]);vib(20);
-  },[toqwowPos,toImgPct]);
-  const onTqMove = useCallback((e:React.PointerEvent)=>{
-    if(!tqDragging.current)return;
-    const p = toImgPct(e.clientX,e.clientY);
-    setToqwowPos({x:Math.max(2,Math.min(90,p.x-tqOff.current.x)),y:Math.max(5,Math.min(90,p.y-tqOff.current.y))});
-    setToqwowMood('dance');
-  },[toImgPct]);
-  const onTqUp = useCallback(()=>{
-    tqDragging.current=false;setDraggingTq(false);
-    setToqwowMood('happy');setTimeout(()=>setToqwowMood('idle'),1500);
-    melody([784,1047,1319]);vib([25,12,25]);
+    dismissTutorial();
+    dragStickerRef.current = true;
+    setDragSticker({emoji, sx:e.clientX, sy:e.clientY});
+    note(ri(500,800),0.12,0.14);vib(10);
+  },[dismissTutorial]);
+  const onStickerTrayMove = useCallback((e:React.PointerEvent)=>{
+    if(!dragStickerRef.current)return;
+    setDragSticker(d=>d?{...d,sx:e.clientX,sy:e.clientY}:d);
+  },[]);
+  const onStickerTrayUp = useCallback((e:React.PointerEvent)=>{
+    if(!dragStickerRef.current)return;
+    dragStickerRef.current=false;
+    const box = contentRef.current?.getBoundingClientRect();
+    setDragSticker(d=>{
+      if(box && d){
+        const x=((e.clientX-box.left)/box.width)*100, y=((e.clientY-box.top)/box.height)*100;
+        if(x>=0&&x<=100&&y>=0&&y<=100){
+          const s:Sticker={id:uid++,emoji:d.emoji,x,y,sz:ri(30,50),rotation:r(-20,20)};
+          setStickers(prev=>[...prev,s]);
+          note(ri(700,1100),0.2,0.16);vib([15,10,15]);
+        }
+      }
+      return null;
+    });
   },[]);
 
-  const onWorldTap = useCallback((e:React.PointerEvent)=>{
-    if(tab!=='decorate')return;
-    const p = toImgPct(e.clientX,e.clientY);
-    const s:Sticker={id:uid++,emoji:STICKERS_SET[ri(0,STICKERS_SET.length)],x:p.x,y:p.y,sz:ri(28,48),rotation:r(-20,20)};
-    setStickers(prev=>[...prev,s]);
-    note(ri(600,1200),0.2,0.18);vib(15);
-  },[tab,toImgPct]);
-
   return (
-    <div ref={worldRef} className="tq-m0-root"
+    <div ref={worldRef} className="tq-m0-root" onPointerDownCapture={dismissTutorial}
       style={{width:'100vw',overflow:'hidden',position:'relative',fontFamily:'system-ui,sans-serif',background:'#1a1040'}}>
 
       {/* Contenedor con scroll horizontal: el mundo se ve a tamaño completo
@@ -311,7 +363,7 @@ export default function Mundo0() {
       <div ref={scrollRef}
         style={{position:'absolute',inset:0,overflowX:'auto',overflowY:'hidden',
           display:'flex',WebkitOverflowScrolling:'touch'}}>
-        <div ref={contentRef} onPointerDown={onWorldTap}
+        <div ref={contentRef}
           style={{position:'relative',height:'100%',aspectRatio:`${IMG_W} / ${IMG_H}`,flexShrink:0,touchAction:'pan-x',isolation:'isolate'}}>
 
           <img src="/planeta-tiqui-bg.jpg" alt="Planeta Tiqui" draggable={false}
@@ -325,7 +377,9 @@ export default function Mundo0() {
             </div>
           ))}
 
-          {buildings.map(bld=>(
+          {buildings.map(bld=>{
+            const isGuide = !!neediest && bld.action===neediest.need;
+            return (
             <div key={bld.id}
               onPointerDown={e=>onBldDown(e,bld.id)}
               onPointerMove={e=>onBldMove(e,bld.id)}
@@ -333,18 +387,19 @@ export default function Mundo0() {
               style={{position:'absolute',left:`${bld.x}%`,top:`${bld.y}%`,
                 fontSize:'4.2vh',lineHeight:1,touchAction:'none',userSelect:'none',
                 zIndex:bld.dragging?80:bld.zIndex+3,
-                cursor:bld.dragging?'grabbing':tab==='objects'?'grab':'default',
+                cursor:bld.dragging?'grabbing':'grab',
                 transform:`scale(${bld.scale})`,
                 transition:bld.dragging?'none':'transform .15s',
-                filter:`drop-shadow(0 4px 12px ${bld.color}88)`,
-                animation:bld.dragging?'none':`objF${bld.id%6} ${3+bld.id*.2}s ease-in-out infinite`,
-                pointerEvents:tab==='objects'?'auto':'none',
+                filter:isGuide?`drop-shadow(0 0 10px gold) drop-shadow(0 4px 12px ${bld.color}88)`:`drop-shadow(0 4px 12px ${bld.color}88)`,
+                animation:bld.dragging?'none':`objF${bld.id%6} ${3+bld.id*.2}s ease-in-out infinite${isGuide?', guideGlow 1s ease-in-out infinite':''}`,
+                pointerEvents:'auto',
               }}>{bld.emoji}</div>
-          ))}
+          );})}
 
           {citizens.map(ch=>{
             const showBubble = ch.bubbleTimer>Date.now();
-            const critNeed = (Object.entries(ch.needs) as [Need,number][]).find(([,v])=>v<25);
+            const critNeed = !ch.isMascot && (Object.entries(ch.needs) as [Need,number][]).find(([,v])=>v<25);
+            const isGuide = !!neediest && neediest.id===ch.id;
             return (
               <div key={ch.id} style={{position:'absolute',left:`${ch.x}%`,top:`${ch.y}%`,zIndex:ch.dragging?90:ch.zIndex,touchAction:'none'}}>
                 {(showBubble||critNeed)&&(
@@ -359,20 +414,22 @@ export default function Mundo0() {
                       borderTop:'7px solid rgba(255,255,255,.95)'}}/>
                   </div>
                 )}
-                <div style={{position:'absolute',bottom:'100%',left:'50%',transform:'translateX(-50%)',
-                  display:'flex',gap:2,marginBottom:2,
-                  opacity:selectedCit===ch.id?1:0,transition:'opacity .2s'}}>
-                  {(Object.entries(ch.needs) as [Need,number][]).map(([need,val])=>(
-                    <div key={need} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-                      <div style={{fontSize:7}}>{NEED_ICONS[need]}</div>
-                      <div style={{width:4,height:22,background:'rgba(255,255,255,.2)',borderRadius:2,overflow:'hidden'}}>
-                        <div style={{position:'relative',width:'100%',height:`${val}%`,
-                          background:val>60?'#7CFC00':val>30?'#FFD700':'#FF6B6B',
-                          borderRadius:2,transition:'height .5s',marginTop:'auto'}}/>
+                {!ch.isMascot&&(
+                  <div style={{position:'absolute',bottom:'100%',left:'50%',transform:'translateX(-50%)',
+                    display:'flex',gap:2,marginBottom:2,
+                    opacity:selectedCit===ch.id?1:0,transition:'opacity .2s'}}>
+                    {(Object.entries(ch.needs) as [Need,number][]).map(([need,val])=>(
+                      <div key={need} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+                        <div style={{fontSize:7}}>{NEED_ICONS[need]}</div>
+                        <div style={{width:4,height:22,background:'rgba(255,255,255,.2)',borderRadius:2,overflow:'hidden'}}>
+                          <div style={{position:'relative',width:'100%',height:`${val}%`,
+                            background:val>60?'#7CFC00':val>30?'#FFD700':'#FF6B6B',
+                            borderRadius:2,transition:'height .5s',marginTop:'auto'}}/>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
                 <div
                   onPointerDown={e=>{onCitDown(e,ch.id);setSelectedCit(ch.id);}}
                   onPointerMove={e=>onCitMove(e,ch.id)}
@@ -380,12 +437,17 @@ export default function Mundo0() {
                   style={{cursor:ch.dragging?'grabbing':'grab',userSelect:'none',touchAction:'none',
                     display:'flex',flexDirection:'column',alignItems:'center',
                     transform:`scale(${ch.scale})`,transition:'transform .2s',
-                    filter:`drop-shadow(0 0 ${ch.dragging?20:10}px ${ch.color})`,
-                    animation:ch.dragging?'none':ch.mood==='happy'?'charHappy .8s ease-in-out infinite alternate':ch.mood==='excited'?'charExcited .4s ease-in-out infinite alternate':ch.mood==='sleepy'?'charSleepy 3s ease-in-out infinite':'charFloat 2.5s ease-in-out infinite alternate',
+                    filter:`drop-shadow(0 0 ${ch.dragging?20:isGuide?18:10}px ${isGuide?'gold':ch.color})`,
+                    animation:(ch.dragging?'none':ch.mood==='happy'?'charHappy .8s ease-in-out infinite alternate':ch.mood==='excited'?'charExcited .4s ease-in-out infinite alternate':ch.mood==='sleepy'?'charSleepy 3s ease-in-out infinite':'charFloat 2.5s ease-in-out infinite alternate')+(isGuide?', guideGlow 1s ease-in-out infinite':''),
                   }}>
-                  <div style={{fontSize:'1.6vh'}}>{ACC_OPTS[ch.acc]}</div>
-                  <div style={{fontSize:'4.4vh'}}>{ch.emoji}</div>
-                  <div style={{fontSize:'1.5vh',marginTop:-2}}>{SUIT_OPTS[ch.suit]}</div>
+                  {ch.img ? (
+                    <img src={ch.img} alt={ch.name} draggable={false}
+                      style={{width:'9vh',height:'auto',objectFit:'contain'}}/>
+                  ) : (<>
+                    <div style={{fontSize:'1.6vh'}}>{ACC_OPTS[ch.acc]}</div>
+                    <div style={{fontSize:'4.4vh'}}>{ch.emoji}</div>
+                    <div style={{fontSize:'1.5vh',marginTop:-2}}>{SUIT_OPTS[ch.suit]}</div>
+                  </>)}
                   <div style={{fontSize:'1.4vh',fontWeight:700,color:'white',textShadow:'0 1px 4px rgba(0,0,0,.8)',
                     background:`${ch.color}44`,borderRadius:8,padding:'1px 6px',marginTop:2,whiteSpace:'nowrap'}}>{ch.name}</div>
                 </div>
@@ -398,15 +460,17 @@ export default function Mundo0() {
               style={{position:'absolute',left:`${s.x}%`,top:`${s.y}%`,fontSize:s.sz,lineHeight:1,userSelect:'none',zIndex:8,cursor:'pointer',transform:`rotate(${s.rotation}deg)`}}>{s.emoji}</div>
           ))}
 
-          <div onPointerDown={onTqDown} onPointerMove={onTqMove} onPointerUp={onTqUp}
-            style={{position:'absolute',left:`${toqwowPos.x}%`,top:`${toqwowPos.y}%`,
-              width:'min(120px,15vh)',cursor:draggingTq?'grabbing':'grab',zIndex:20,touchAction:'none',
-              filter:`drop-shadow(0 0 ${draggingTq?'36px':'22px'} #B8A9FFcc)`,
-              animation:toqwowMood==='dance'?'tqDance .35s ease-in-out infinite alternate':toqwowMood==='happy'?'tqHappy .4s ease-in-out 3':'tqFloat 3.5s ease-in-out infinite',
-              transform:draggingTq?'scale(1.18)':'scale(1)',transition:'filter .2s,transform .2s'}}>
-            <img src="/toqwow-mascota.png" alt="Toqwow" draggable={false}
-              style={{objectFit:'contain',width:'100%',height:'auto',mixBlendMode:'screen',pointerEvents:'none'}}/>
-          </div>
+          {/* Mano tutorial (solo la primera vez): apunta al personaje que
+              más necesita algo, o a ToqWow si todos están bien. Sin texto. */}
+          {showTutorial&&(()=>{
+            const target = neediest ? citizens.find(c=>c.id===neediest.id) : citizens[citizens.length-1];
+            if(!target) return null;
+            return (
+              <div style={{position:'absolute',left:`${target.x}%`,top:`${target.y}%`,
+                transform:'translate(60%,-10%)',fontSize:'6vh',zIndex:96,pointerEvents:'none',
+                filter:'drop-shadow(0 4px 10px rgba(0,0,0,.5))',animation:'tutorialHand 1.1s ease-in-out infinite'}}>👆</div>
+            );
+          })()}
         </div>
       </div>
 
@@ -422,7 +486,7 @@ export default function Mundo0() {
         </div>
       )}
 
-      {showCustomize&&selectedCit!==null&&(
+      {showCustomize&&selectedCit!==null&&!citizens[selectedCit]?.isMascot&&(
         <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.82)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(8px)'}}>
           <div style={{background:'rgba(10,5,30,.96)',borderRadius:24,padding:20,maxWidth:340,width:'90%',border:`1.5px solid ${citizens[selectedCit]?.color||'#B8A9FF'}44`}}>
             <div style={{fontSize:16,fontWeight:800,color:'white',marginBottom:12,textAlign:'center'}}>✨ Personalizar {citizens[selectedCit]?.name}</div>
@@ -452,70 +516,67 @@ export default function Mundo0() {
         <div style={{display:'flex',gap:6}}>
           <button onClick={()=>setShowZoneDebug(v=>!v)} title="Ver zonas (debug)"
             style={{background:showZoneDebug?'rgba(255,0,150,.3)':'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',borderRadius:50,padding:'6px 10px',fontSize:12,color:'white',cursor:'pointer'}}>🔧</button>
-          <button onClick={()=>{if(selectedCit!==null)setShowCustomize(true);}} style={{background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',borderRadius:50,padding:'6px 14px',fontSize:12,color:'white',cursor:'pointer',opacity:selectedCit!==null?1:0.4}}>✨</button>
+          <button onClick={()=>{if(selectedCit!==null&&!citizens[selectedCit]?.isMascot)setShowCustomize(true);}}
+            style={{background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',borderRadius:50,padding:'6px 14px',fontSize:12,color:'white',cursor:'pointer',opacity:(selectedCit!==null&&!citizens[selectedCit]?.isMascot)?1:0.4}}>✨</button>
         </div>
       </div>
 
-      <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:300,background:'rgba(2,4,20,.94)',backdropFilter:'blur(16px)',borderTop:'1px solid rgba(255,255,255,.1)',padding:'8px 12px calc(12px + env(safe-area-inset-bottom))'}}>
-        <div style={{display:'flex',justifyContent:'center',gap:5,marginBottom:8}}>
-          {[
-            {id:'citizens',icon:'👨‍👩‍👧‍👦',label:'Personas'},
-            {id:'objects', icon:'🎁',label:'Objetos'},
-            {id:'decorate',icon:'✨',label:'Decorar'},
-          ].map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id as any)}
-              style={{background:tab===t.id?'rgba(184,169,255,.33)':'rgba(255,255,255,.07)',
-                border:tab===t.id?'2px solid #B8A9FF':'1px solid rgba(255,255,255,.15)',
-                borderRadius:50,padding:'5px 12px',fontSize:11,fontWeight:tab===t.id?700:400,
-                color:'white',cursor:'pointer',transition:'all .2s'}}>{t.icon} {t.label}</button>
+      <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:300,background:'rgba(2,4,20,.94)',backdropFilter:'blur(16px)',borderTop:'1px solid rgba(255,255,255,.1)',padding:'8px 12px calc(10px + env(safe-area-inset-bottom))'}}>
+        {/* Fila de personajes: tocar selecciona + saluda + desliza el mundo
+            hasta ahí. Sin palabras — solo caritas y colores. */}
+        <div style={{display:'flex',gap:7,overflowX:'auto',paddingBottom:7}}>
+          {citizens.map(ch=>{
+            const isGuide = !!neediest && neediest.id===ch.id;
+            return (
+              <div key={ch.id} onClick={()=>onTrayCitTap(ch.id)}
+                style={{background:selectedCit===ch.id?`${ch.color}33`:'rgba(255,255,255,.07)',
+                  border:`1.5px solid ${isGuide?'gold':selectedCit===ch.id?ch.color:'rgba(255,255,255,.15)'}`,
+                  borderRadius:16,padding:'6px 8px',cursor:'pointer',flexShrink:0,minWidth:52,textAlign:'center',
+                  transition:'all .2s',animation:isGuide?'guideGlow 1s ease-in-out infinite':'none'}}>
+                {ch.img ? (
+                  <img src={ch.img} alt={ch.name} style={{width:28,height:28,objectFit:'contain',margin:'0 auto'}}/>
+                ) : (
+                  <div style={{fontSize:24}}>{ch.emoji}</div>
+                )}
+                {!ch.isMascot&&(
+                  <div style={{display:'flex',gap:2,justifyContent:'center',marginTop:4}}>
+                    {(Object.entries(ch.needs) as [Need,number][]).map(([need,val])=>(
+                      <div key={need} style={{width:3,height:12,background:'rgba(255,255,255,.15)',borderRadius:2,overflow:'hidden',position:'relative'}}>
+                        <div style={{position:'absolute',bottom:0,width:'100%',height:`${val}%`,background:val>60?'#7CFC00':val>30?'#FFD700':'#FF6B6B',borderRadius:2,transition:'height .5s'}}/>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Fila de stickers: se arrastran directo desde acá hasta el mundo.
+            Tocar un sticker ya puesto en el mundo lo borra (sin botón
+            "limpiar" que haya que leer). */}
+        <div style={{display:'flex',gap:8,overflowX:'auto'}}>
+          {STICKERS_SET.map((emoji,i)=>(
+            <div key={i}
+              onPointerDown={e=>onStickerTrayDown(e,emoji)}
+              onPointerMove={onStickerTrayMove}
+              onPointerUp={onStickerTrayUp}
+              style={{fontSize:26,flexShrink:0,cursor:'grab',touchAction:'none',userSelect:'none',
+                filter:'drop-shadow(0 2px 6px rgba(255,255,255,.25))'}}>{emoji}</div>
           ))}
         </div>
-
-        {tab==='citizens'&&(
-          <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:4}}>
-            {citizens.map(ch=>(
-              <div key={ch.id} onClick={()=>setSelectedCit(selectedCit===ch.id?null:ch.id)}
-                style={{background:selectedCit===ch.id?`${ch.color}33`:'rgba(255,255,255,.07)',
-                  border:`1.5px solid ${selectedCit===ch.id?ch.color:'rgba(255,255,255,.15)'}`,
-                  borderRadius:14,padding:'8px 10px',cursor:'pointer',flexShrink:0,minWidth:80,textAlign:'center',transition:'all .2s'}}>
-                <div style={{fontSize:22}}>{ch.emoji}</div>
-                <div style={{fontSize:10,color:'white',fontWeight:700,marginBottom:4}}>{ch.name}</div>
-                <div style={{display:'flex',gap:2,justifyContent:'center'}}>
-                  {(Object.entries(ch.needs) as [Need,number][]).map(([need,val])=>(
-                    <div key={need} style={{width:3,height:14,background:'rgba(255,255,255,.15)',borderRadius:2,overflow:'hidden',position:'relative'}}>
-                      <div style={{position:'absolute',bottom:0,width:'100%',height:`${val}%`,background:val>60?'#7CFC00':val>30?'#FFD700':'#FF6B6B',borderRadius:2,transition:'height .5s'}}/>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {tab==='objects'&&(
-          <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:4,alignItems:'center'}}>
-            <div style={{fontSize:10,color:'rgba(255,255,255,.35)',whiteSpace:'nowrap',minWidth:70}}>🎁 Arrastrá a una zona</div>
-            <div style={{display:'flex',gap:7,flex:1,overflowX:'auto'}}>
-              {ZONE_ITEMS.map((item)=>(
-                <div key={item.label} style={{fontSize:30,flexShrink:0,cursor:'grab',
-                  filter:`drop-shadow(0 2px 6px ${item.color}66)`}}
-                  title={item.label}>{item.emoji}</div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tab==='decorate'&&(
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <div style={{fontSize:10,color:'rgba(255,255,255,.4)'}}>✨ Tocá el mundo para decorar</div>
-            <button onClick={()=>setStickers([])}
-              style={{marginLeft:'auto',background:'rgba(255,80,80,.25)',border:'1px solid rgba(255,100,100,.4)',borderRadius:12,padding:'4px 12px',color:'white',fontSize:11,cursor:'pointer'}}>🗑️ Limpiar</button>
-          </div>
-        )}
       </div>
+
+      {/* Sticker siguiendo el dedo mientras se arrastra desde la bandeja */}
+      {dragSticker&&(
+        <div style={{position:'fixed',left:dragSticker.sx,top:dragSticker.sy,transform:'translate(-50%,-50%)',
+          fontSize:40,pointerEvents:'none',zIndex:500,filter:'drop-shadow(0 4px 10px rgba(0,0,0,.4))'}}>{dragSticker.emoji}</div>
+      )}
 
       <style>{`
         .tq-m0-root{height:100vh;height:100dvh;}
+        @keyframes guideGlow{0%,100%{filter:drop-shadow(0 0 6px gold)}50%{filter:drop-shadow(0 0 20px gold)}}
+        @keyframes tutorialHand{0%,100%{transform:translate(60%,-10%) scale(1)}50%{transform:translate(50%,0%) scale(1.15)}}
         @keyframes tqFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
         @keyframes tqHappy{0%{transform:scale(1) rotate(0)}33%{transform:scale(1.22) rotate(10deg)}66%{transform:scale(1.22) rotate(-10deg)}100%{transform:scale(1) rotate(0)}}
         @keyframes tqDance{0%{transform:rotate(-14deg) scale(1.15)}100%{transform:rotate(14deg) scale(1.15)}}
