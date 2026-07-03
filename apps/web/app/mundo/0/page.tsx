@@ -152,8 +152,9 @@ export default function Mundo0() {
   const [selectedCit, setSelectedCit] = useState<number|null>(null);
   const [showCustomize, setShowCustomize] = useState(false);
   const [showZoneDebug, setShowZoneDebug] = useState(false);
-  const [imgRect, setImgRect] = useState({left:0,top:0,width:0,height:0});
 
+  const scrollRef    = useRef<HTMLDivElement>(null);
+  const contentRef   = useRef<HTMLDivElement>(null); // el "mundo" real, tamaño fijo, con scroll horizontal
   const draggingId   = useRef<number|null>(null);
   const draggingBld  = useRef<number|null>(null);
   const dragOff      = useRef({x:0,y:0});
@@ -162,31 +163,22 @@ export default function Mundo0() {
   const tqOff        = useRef({x:0,y:0});
   const needTimer    = useRef<ReturnType<typeof setInterval>|null>(null);
 
-  const updateImgRect = useCallback(()=>{
-    const el = worldRef.current; if(!el) return;
-    const cw = el.clientWidth, ch = el.clientHeight;
-    const containerAspect = cw/ch;
-    let width:number, height:number, left:number, top:number;
-    if (containerAspect > IMG_ASPECT) {
-      height = ch; width = ch*IMG_ASPECT; left = (cw-width)/2; top = 0;
-    } else {
-      width = cw; height = cw/IMG_ASPECT; left = 0; top = (ch-height)/2;
-    }
-    setImgRect({left,top,width,height});
-  },[]);
+  /* Centrar el scroll horizontal al entrar, para que arranque mostrando la
+     pileta central en vez del borde izquierdo de la imagen. */
   useEffect(()=>{
-    updateImgRect();
-    window.addEventListener('resize',updateImgRect);
-    window.addEventListener('orientationchange',updateImgRect);
-    return ()=>{window.removeEventListener('resize',updateImgRect);window.removeEventListener('orientationchange',updateImgRect);};
-  },[updateImgRect]);
+    const sc = scrollRef.current; if(!sc) return;
+    requestAnimationFrame(()=>{ sc.scrollLeft = (sc.scrollWidth - sc.clientWidth)/2; });
+  },[]);
 
+  /* % de la imagen a partir de un punto de pantalla — usa el rectángulo
+     real del contenido (contentRef), que el navegador ya calcula solo
+     (aspect-ratio CSS + flex), sin necesidad de recalcular a mano en JS
+     ni de escuchar resize/orientationchange. Funciona igual haya scroll
+     horizontal o no. */
   const toImgPct = useCallback((clientX:number, clientY:number)=>{
-    const wr = worldRef.current!.getBoundingClientRect();
-    const relX = clientX - wr.left - imgRect.left;
-    const relY = clientY - wr.top  - imgRect.top;
-    return { x:(relX/imgRect.width)*100, y:(relY/imgRect.height)*100 };
-  },[imgRect]);
+    const box = contentRef.current!.getBoundingClientRect();
+    return { x:((clientX-box.left)/box.width)*100, y:((clientY-box.top)/box.height)*100 };
+  },[]);
 
   const zoneAt = useCallback((xPct:number, yPct:number): Zone|null=>{
     return ZONES.find(z => xPct>=z.x && xPct<=z.x+z.w && yPct>=z.y && yPct<=z.y+z.h) || null;
@@ -215,9 +207,9 @@ export default function Mundo0() {
       const mood=calcMood(n);
       NEED_SND[action](); vib([30,15,30]);
       for(let i=0;i<(bonus?12:6);i++) setTimeout(()=>{
-        const wr=worldRef.current?.getBoundingClientRect();
-        const pxv = imgRect.left+(r(20,80)/100)*imgRect.width + (wr?.left||0);
-        const pyv = imgRect.top +(r(25,70)/100)*imgRect.height + (wr?.top||0);
+        const box = contentRef.current?.getBoundingClientRect();
+        const pxv = (box?.left||0) + r(20,80)/100*(box?.width||0);
+        const pyv = (box?.top ||0) + r(25,70)/100*(box?.height||0);
         const pe:Particle[]=[{id:uid++,x:pxv,y:pyv,e:NEED_ICONS[action]}];
         setParticles(p=>[...p,...pe]);
         setTimeout(()=>setParticles(p=>p.filter(pp=>!pe.find(x=>x.id===pp.id))),800);
@@ -226,7 +218,7 @@ export default function Mundo0() {
       setShowCombo(true); setTimeout(()=>setShowCombo(false),2400);
       return{...ch,needs:n,mood,bubble:MOOD_BUBBLE[mood],bubbleTimer:Date.now()+3000};
     }));
-  },[imgRect]);
+  },[]);
 
   const onBldDown = useCallback((e:React.PointerEvent,id:number)=>{
     if(tab!=='objects')return;
@@ -308,113 +300,121 @@ export default function Mundo0() {
     note(ri(600,1200),0.2,0.18);vib(15);
   },[tab,toImgPct]);
 
-  const px = (pct:number)=> imgRect.left + (pct/100)*imgRect.width;
-  const py = (pct:number)=> imgRect.top  + (pct/100)*imgRect.height;
-  const pw = (pct:number)=> (pct/100)*imgRect.width;
-  const ph = (pct:number)=> (pct/100)*imgRect.height;
-
   return (
     <div ref={worldRef}
-      onPointerDown={onWorldTap}
-      style={{width:'100vw',height:'100vh',overflow:'hidden',position:'relative',touchAction:'none',fontFamily:'system-ui,sans-serif',background:'#1a1040'}}>
+      style={{width:'100vw',height:'100vh',overflow:'hidden',position:'relative',fontFamily:'system-ui,sans-serif',background:'#1a1040'}}>
 
-      <img src="/planeta-tiqui-bg.jpg" alt="Planeta Tiqui" draggable={false}
-        style={{position:'absolute',left:imgRect.left,top:imgRect.top,width:imgRect.width,height:imgRect.height,objectFit:'contain',pointerEvents:'none',zIndex:0}}/>
+      {/* Contenedor con scroll horizontal: el mundo se ve a tamaño completo
+          (altura de pantalla) y se desliza de lado a lado para explorarlo,
+          en vez de achicarse para entrar todo de una vez (eso era lo que
+          causaba que todo apareciera amontonado en una franja chiquita). */}
+      <div ref={scrollRef}
+        style={{position:'absolute',inset:0,overflowX:'auto',overflowY:'hidden',
+          display:'flex',justifyContent:'center',WebkitOverflowScrolling:'touch'}}>
+        <div ref={contentRef} onPointerDown={onWorldTap}
+          style={{position:'relative',height:'100%',aspectRatio:`${IMG_W} / ${IMG_H}`,flexShrink:0,touchAction:'pan-x'}}>
 
-      {showZoneDebug && ZONES.map(z=>(
-        <div key={z.id} style={{position:'absolute',left:px(z.x),top:py(z.y),width:pw(z.w),height:ph(z.h),
-          border:'2px dashed rgba(255,255,255,.8)',background:'rgba(255,0,150,.15)',zIndex:3,pointerEvents:'none',
-          display:'flex',alignItems:'center',justifyContent:'center'}}>
-          <span style={{fontSize:10,fontWeight:800,color:'white',background:'rgba(0,0,0,.6)',padding:'2px 6px',borderRadius:6}}>{z.name}</span>
-        </div>
-      ))}
+          <img src="/planeta-tiqui-bg.jpg" alt="Planeta Tiqui" draggable={false}
+            style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'fill',pointerEvents:'none',zIndex:0}}/>
 
-      {buildings.map(bld=>(
-        <div key={bld.id}
-          onPointerDown={e=>onBldDown(e,bld.id)}
-          onPointerMove={e=>onBldMove(e,bld.id)}
-          onPointerUp={e=>onBldUp(e,bld.id)}
-          style={{position:'absolute',left:px(bld.x),top:py(bld.y),
-            fontSize:bld.sz,lineHeight:1,touchAction:'none',userSelect:'none',
-            zIndex:bld.dragging?80:bld.zIndex+3,
-            cursor:bld.dragging?'grabbing':tab==='objects'?'grab':'default',
-            transform:`scale(${bld.scale})`,
-            transition:bld.dragging?'none':'transform .15s',
-            filter:`drop-shadow(0 4px 12px ${bld.color}88)`,
-            animation:bld.dragging?'none':`objF${bld.id%6} ${3+bld.id*.2}s ease-in-out infinite`,
-            pointerEvents:tab==='objects'?'auto':'none',
-          }}>{bld.emoji}</div>
-      ))}
+          {showZoneDebug && ZONES.map(z=>(
+            <div key={z.id} style={{position:'absolute',left:`${z.x}%`,top:`${z.y}%`,width:`${z.w}%`,height:`${z.h}%`,
+              border:'2px dashed rgba(255,255,255,.8)',background:'rgba(255,0,150,.15)',zIndex:3,pointerEvents:'none',
+              display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <span style={{fontSize:'1.1vh',fontWeight:800,color:'white',background:'rgba(0,0,0,.6)',padding:'2px 6px',borderRadius:6,whiteSpace:'nowrap'}}>{z.name}</span>
+            </div>
+          ))}
 
-      {citizens.map(ch=>{
-        const showBubble = ch.bubbleTimer>Date.now();
-        const critNeed = (Object.entries(ch.needs) as [Need,number][]).find(([,v])=>v<25);
-        return (
-          <div key={ch.id} style={{position:'absolute',left:px(ch.x),top:py(ch.y),zIndex:ch.dragging?90:ch.zIndex,touchAction:'none'}}>
-            {(showBubble||critNeed)&&(
-              <div style={{position:'absolute',bottom:'108%',left:'50%',transform:'translateX(-50%)',
-                background:'rgba(255,255,255,.95)',borderRadius:16,padding:'5px 11px',
-                fontSize:11,fontWeight:700,color:'#111',whiteSpace:'nowrap',
-                boxShadow:'0 4px 16px rgba(0,0,0,.3)',zIndex:95,pointerEvents:'none',
-                animation:'bubblePop .3s ease-out'}}>
-                {showBubble?ch.bubble:`${NEED_ICONS[critNeed![0]]} ¡${NEED_LABEL[critNeed![0]]}!`}
-                <div style={{position:'absolute',bottom:-6,left:'50%',transform:'translateX(-50%)',
-                  width:0,height:0,borderLeft:'6px solid transparent',borderRight:'6px solid transparent',
-                  borderTop:'7px solid rgba(255,255,255,.95)'}}/>
-              </div>
-            )}
-            <div style={{position:'absolute',bottom:'100%',left:'50%',transform:'translateX(-50%)',
-              display:'flex',gap:2,marginBottom:2,
-              opacity:selectedCit===ch.id?1:0,transition:'opacity .2s'}}>
-              {(Object.entries(ch.needs) as [Need,number][]).map(([need,val])=>(
-                <div key={need} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-                  <div style={{fontSize:7}}>{NEED_ICONS[need]}</div>
-                  <div style={{width:4,height:22,background:'rgba(255,255,255,.2)',borderRadius:2,overflow:'hidden'}}>
-                    <div style={{position:'relative',width:'100%',height:`${val}%`,
-                      background:val>60?'#7CFC00':val>30?'#FFD700':'#FF6B6B',
-                      borderRadius:2,transition:'height .5s',marginTop:'auto'}}/>
+          {buildings.map(bld=>(
+            <div key={bld.id}
+              onPointerDown={e=>onBldDown(e,bld.id)}
+              onPointerMove={e=>onBldMove(e,bld.id)}
+              onPointerUp={e=>onBldUp(e,bld.id)}
+              style={{position:'absolute',left:`${bld.x}%`,top:`${bld.y}%`,
+                fontSize:'4.2vh',lineHeight:1,touchAction:'none',userSelect:'none',
+                zIndex:bld.dragging?80:bld.zIndex+3,
+                cursor:bld.dragging?'grabbing':tab==='objects'?'grab':'default',
+                transform:`scale(${bld.scale})`,
+                transition:bld.dragging?'none':'transform .15s',
+                filter:`drop-shadow(0 4px 12px ${bld.color}88)`,
+                animation:bld.dragging?'none':`objF${bld.id%6} ${3+bld.id*.2}s ease-in-out infinite`,
+                pointerEvents:tab==='objects'?'auto':'none',
+              }}>{bld.emoji}</div>
+          ))}
+
+          {citizens.map(ch=>{
+            const showBubble = ch.bubbleTimer>Date.now();
+            const critNeed = (Object.entries(ch.needs) as [Need,number][]).find(([,v])=>v<25);
+            return (
+              <div key={ch.id} style={{position:'absolute',left:`${ch.x}%`,top:`${ch.y}%`,zIndex:ch.dragging?90:ch.zIndex,touchAction:'none'}}>
+                {(showBubble||critNeed)&&(
+                  <div style={{position:'absolute',bottom:'108%',left:'50%',transform:'translateX(-50%)',
+                    background:'rgba(255,255,255,.95)',borderRadius:16,padding:'5px 11px',
+                    fontSize:11,fontWeight:700,color:'#111',whiteSpace:'nowrap',
+                    boxShadow:'0 4px 16px rgba(0,0,0,.3)',zIndex:95,pointerEvents:'none',
+                    animation:'bubblePop .3s ease-out'}}>
+                    {showBubble?ch.bubble:`${NEED_ICONS[critNeed![0]]} ¡${NEED_LABEL[critNeed![0]]}!`}
+                    <div style={{position:'absolute',bottom:-6,left:'50%',transform:'translateX(-50%)',
+                      width:0,height:0,borderLeft:'6px solid transparent',borderRight:'6px solid transparent',
+                      borderTop:'7px solid rgba(255,255,255,.95)'}}/>
                   </div>
+                )}
+                <div style={{position:'absolute',bottom:'100%',left:'50%',transform:'translateX(-50%)',
+                  display:'flex',gap:2,marginBottom:2,
+                  opacity:selectedCit===ch.id?1:0,transition:'opacity .2s'}}>
+                  {(Object.entries(ch.needs) as [Need,number][]).map(([need,val])=>(
+                    <div key={need} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+                      <div style={{fontSize:7}}>{NEED_ICONS[need]}</div>
+                      <div style={{width:4,height:22,background:'rgba(255,255,255,.2)',borderRadius:2,overflow:'hidden'}}>
+                        <div style={{position:'relative',width:'100%',height:`${val}%`,
+                          background:val>60?'#7CFC00':val>30?'#FFD700':'#FF6B6B',
+                          borderRadius:2,transition:'height .5s',marginTop:'auto'}}/>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div
-              onPointerDown={e=>{onCitDown(e,ch.id);setSelectedCit(ch.id);}}
-              onPointerMove={e=>onCitMove(e,ch.id)}
-              onPointerUp={e=>onCitUp(e,ch.id)}
-              style={{cursor:ch.dragging?'grabbing':'grab',userSelect:'none',
-                display:'flex',flexDirection:'column',alignItems:'center',
-                transform:`scale(${ch.scale})`,transition:'transform .2s',
-                filter:`drop-shadow(0 0 ${ch.dragging?20:10}px ${ch.color})`,
-                animation:ch.dragging?'none':ch.mood==='happy'?'charHappy .8s ease-in-out infinite alternate':ch.mood==='excited'?'charExcited .4s ease-in-out infinite alternate':ch.mood==='sleepy'?'charSleepy 3s ease-in-out infinite':'charFloat 2.5s ease-in-out infinite alternate',
-              }}>
-              <div style={{fontSize:10}}>{ACC_OPTS[ch.acc]}</div>
-              <div style={{fontSize:28}}>{ch.emoji}</div>
-              <div style={{fontSize:9,marginTop:-2}}>{SUIT_OPTS[ch.suit]}</div>
-              <div style={{fontSize:9,fontWeight:700,color:'white',textShadow:'0 1px 4px rgba(0,0,0,.8)',
-                background:`${ch.color}44`,borderRadius:8,padding:'1px 6px',marginTop:2}}>{ch.name}</div>
-            </div>
+                <div
+                  onPointerDown={e=>{onCitDown(e,ch.id);setSelectedCit(ch.id);}}
+                  onPointerMove={e=>onCitMove(e,ch.id)}
+                  onPointerUp={e=>onCitUp(e,ch.id)}
+                  style={{cursor:ch.dragging?'grabbing':'grab',userSelect:'none',
+                    display:'flex',flexDirection:'column',alignItems:'center',
+                    transform:`scale(${ch.scale})`,transition:'transform .2s',
+                    filter:`drop-shadow(0 0 ${ch.dragging?20:10}px ${ch.color})`,
+                    animation:ch.dragging?'none':ch.mood==='happy'?'charHappy .8s ease-in-out infinite alternate':ch.mood==='excited'?'charExcited .4s ease-in-out infinite alternate':ch.mood==='sleepy'?'charSleepy 3s ease-in-out infinite':'charFloat 2.5s ease-in-out infinite alternate',
+                  }}>
+                  <div style={{fontSize:'1.6vh'}}>{ACC_OPTS[ch.acc]}</div>
+                  <div style={{fontSize:'4.4vh'}}>{ch.emoji}</div>
+                  <div style={{fontSize:'1.5vh',marginTop:-2}}>{SUIT_OPTS[ch.suit]}</div>
+                  <div style={{fontSize:'1.4vh',fontWeight:700,color:'white',textShadow:'0 1px 4px rgba(0,0,0,.8)',
+                    background:`${ch.color}44`,borderRadius:8,padding:'1px 6px',marginTop:2,whiteSpace:'nowrap'}}>{ch.name}</div>
+                </div>
+              </div>
+            );
+          })}
+
+          {stickers.map(s=>(
+            <div key={s.id} onClick={()=>setStickers(prev=>prev.filter(x=>x.id!==s.id))}
+              style={{position:'absolute',left:`${s.x}%`,top:`${s.y}%`,fontSize:s.sz,lineHeight:1,userSelect:'none',zIndex:8,cursor:'pointer',transform:`rotate(${s.rotation}deg)`}}>{s.emoji}</div>
+          ))}
+
+          <div onPointerDown={onTqDown} onPointerMove={onTqMove} onPointerUp={onTqUp}
+            style={{position:'absolute',left:`${toqwowPos.x}%`,top:`${toqwowPos.y}%`,
+              width:'min(120px,15vh)',cursor:draggingTq?'grabbing':'grab',zIndex:20,touchAction:'none',
+              filter:`drop-shadow(0 0 ${draggingTq?'36px':'22px'} #B8A9FFcc)`,
+              animation:toqwowMood==='dance'?'tqDance .35s ease-in-out infinite alternate':toqwowMood==='happy'?'tqHappy .4s ease-in-out 3':'tqFloat 3.5s ease-in-out infinite',
+              transform:draggingTq?'scale(1.18)':'scale(1)',transition:'filter .2s,transform .2s'}}>
+            <img src="/toqwow-mascota.png" alt="Toqwow" draggable={false}
+              style={{objectFit:'contain',width:'100%',height:'auto',mixBlendMode:'screen',pointerEvents:'none'}}/>
           </div>
-        );
-      })}
+        </div>
+      </div>
 
-      {stickers.map(s=>(
-        <div key={s.id} onClick={()=>setStickers(prev=>prev.filter(x=>x.id!==s.id))}
-          style={{position:'absolute',left:px(s.x),top:py(s.y),fontSize:s.sz,lineHeight:1,userSelect:'none',zIndex:8,cursor:'pointer',transform:`rotate(${s.rotation}deg)`}}>{s.emoji}</div>
-      ))}
-
+      {/* Partículas: van fuera del contenedor de scroll, en coordenadas
+          reales de pantalla (ya vienen calculadas así desde interact()). */}
       {particles.map(p=>(
         <div key={p.id} style={{position:'absolute',left:p.x,top:p.y,fontSize:ri(20,32),pointerEvents:'none',zIndex:100,lineHeight:1,animation:'burstP .9s ease-out forwards'}}>{p.e}</div>
       ))}
-
-      <div onPointerDown={onTqDown} onPointerMove={onTqMove} onPointerUp={onTqUp}
-        style={{position:'absolute',left:px(toqwowPos.x),top:py(toqwowPos.y),
-          width:'min(120px,21vw)',cursor:draggingTq?'grabbing':'grab',zIndex:20,touchAction:'none',
-          filter:`drop-shadow(0 0 ${draggingTq?'36px':'22px'} #B8A9FFcc)`,
-          animation:toqwowMood==='dance'?'tqDance .35s ease-in-out infinite alternate':toqwowMood==='happy'?'tqHappy .4s ease-in-out 3':'tqFloat 3.5s ease-in-out infinite',
-          transform:draggingTq?'scale(1.18)':'scale(1)',transition:'filter .2s,transform .2s'}}>
-        <img src="/toqwow-mascota.png" alt="Toqwow" draggable={false}
-          style={{objectFit:'contain',width:'100%',height:'auto',mixBlendMode:'screen',pointerEvents:'none'}}/>
-      </div>
 
       {showCombo&&(
         <div style={{position:'absolute',top:'20%',left:'50%',transform:'translateX(-50%)',zIndex:110,textAlign:'center',animation:'comboIn .4s ease-out',pointerEvents:'none'}}>
@@ -456,7 +456,7 @@ export default function Mundo0() {
         </div>
       </div>
 
-      <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:60,background:'rgba(2,4,20,.94)',backdropFilter:'blur(16px)',borderTop:'1px solid rgba(255,255,255,.1)',padding:'8px 12px 12px'}}>
+      <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:60,background:'rgba(2,4,20,.94)',backdropFilter:'blur(16px)',borderTop:'1px solid rgba(255,255,255,.1)',padding:'8px 12px calc(12px + env(safe-area-inset-bottom))'}}>
         <div style={{display:'flex',justifyContent:'center',gap:5,marginBottom:8}}>
           {[
             {id:'citizens',icon:'👨‍👩‍👧‍👦',label:'Personas'},
