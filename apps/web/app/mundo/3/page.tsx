@@ -37,23 +37,23 @@ interface FurnitureItem {
 }
 type Particle = { id:number; x:number; y:number; e:string; };
 
-/* ══ HABITACIONES (28 — Los Supersónicos) ══ */
+/* ══ HABITACIONES (28 — Casa Galáctica) ══ */
 const ROOMS = [
   { id:0,  name:'Sala Principal',      emoji:'🛋️',  bg:'linear-gradient(160deg,#1a0533 0%,#2d0b5e 50%,#1a0533 100%)', accent:'#B8A9FF' },
   { id:1,  name:'Cocina Galáctica',    emoji:'🍳',  bg:'linear-gradient(160deg,#0a1a10 0%,#0d3320 50%,#0a1a10 100%)', accent:'#7CFC00' },
-  { id:2,  name:'Cuarto de Elroy',     emoji:'🔭',  bg:'linear-gradient(160deg,#001040 0%,#002580 50%,#001040 100%)', accent:'#4D96FF' },
-  { id:3,  name:'Cuarto de Judy',      emoji:'💄',  bg:'linear-gradient(160deg,#2a0020 0%,#5a004a 50%,#2a0020 100%)', accent:'#FF6B9D' },
+  { id:2,  name:'Cuarto de Nano',      emoji:'🔭',  bg:'linear-gradient(160deg,#001040 0%,#002580 50%,#001040 100%)', accent:'#4D96FF' },
+  { id:3,  name:'Cuarto de Bibi',      emoji:'💄',  bg:'linear-gradient(160deg,#2a0020 0%,#5a004a 50%,#2a0020 100%)', accent:'#FF6B9D' },
   { id:4,  name:'Garaje Espacial',     emoji:'🚀',  bg:'linear-gradient(160deg,#0a0a0a 0%,#1a1a2e 50%,#0a0a0a 100%)', accent:'#87CEEB' },
   { id:5,  name:'Jardín Estelar',      emoji:'🌸',  bg:'linear-gradient(160deg,#001508 0%,#003318 50%,#001508 100%)', accent:'#98FF98' },
   { id:6,  name:'Azotea Cósmica',      emoji:'🌌',  bg:'linear-gradient(160deg,#000010 0%,#00002a 50%,#000010 100%)', accent:'#00D4C8' },
-  { id:7,  name:'Laboratorio Astro',   emoji:'🔬',  bg:'linear-gradient(160deg,#0a1520 0%,#152a3a 50%,#0a1520 100%)', accent:'#FFD700' },
+  { id:7,  name:'Laboratorio Estelar', emoji:'🔬',  bg:'linear-gradient(160deg,#0a1520 0%,#152a3a 50%,#0a1520 100%)', accent:'#FFD700' },
   { id:8,  name:'Baño Estelar',        emoji:'🛁',  bg:'linear-gradient(160deg,#001020 0%,#002040 50%,#001020 100%)', accent:'#00CED1' },
   { id:9,  name:'Comedor Orbital',     emoji:'🍽️',  bg:'linear-gradient(160deg,#1a0a00 0%,#3a1a00 50%,#1a0a00 100%)', accent:'#FFA07A' },
   { id:10, name:'Sala de Juegos',      emoji:'🎮',  bg:'linear-gradient(160deg,#0a001a 0%,#1a0035 50%,#0a001a 100%)', accent:'#C77DFF' },
   { id:11, name:'Biblioteca Cósmica',  emoji:'📚',  bg:'linear-gradient(160deg,#100800 0%,#281500 50%,#100800 100%)', accent:'#DEB887' },
-  { id:12, name:'Cuarto de Astro',     emoji:'🐕',  bg:'linear-gradient(160deg,#001008 0%,#002515 50%,#001008 100%)', accent:'#7CFC00' },
-  { id:13, name:'Estudio de George',   emoji:'💼',  bg:'linear-gradient(160deg,#0d0d1a 0%,#1a1a35 50%,#0d0d1a 100%)', accent:'#4D96FF' },
-  { id:14, name:'Cuarto de Jane',      emoji:'🌷',  bg:'linear-gradient(160deg,#1a0015 0%,#35002a 50%,#1a0015 100%)', accent:'#FFB3D1' },
+  { id:12, name:'Cuarto de Cometa',    emoji:'🐕',  bg:'linear-gradient(160deg,#001008 0%,#002515 50%,#001008 100%)', accent:'#7CFC00' },
+  { id:13, name:'Estudio de Tico',     emoji:'💼',  bg:'linear-gradient(160deg,#0d0d1a 0%,#1a1a35 50%,#0d0d1a 100%)', accent:'#4D96FF' },
+  { id:14, name:'Cuarto de Mimi',      emoji:'🌷',  bg:'linear-gradient(160deg,#1a0015 0%,#35002a 50%,#1a0015 100%)', accent:'#FFB3D1' },
   { id:15, name:'Lavandería Orbital',  emoji:'🫧',  bg:'linear-gradient(160deg,#001015 0%,#00202d 50%,#001015 100%)', accent:'#87CEEB' },
   { id:16, name:'Gimnasio Espacial',   emoji:'🏋️',  bg:'linear-gradient(160deg,#150005 0%,#2a000f 50%,#150005 100%)', accent:'#FF6B6B' },
   { id:17, name:'Piscina Galáctica',   emoji:'🏊',  bg:'linear-gradient(160deg,#00101a 0%,#002035 50%,#00101a 100%)', accent:'#00BFFF' },
@@ -117,7 +117,7 @@ const FURNITURE_BY_ROOM: Record<number, {emoji:string; label:string; action:Need
     {emoji:'🥚',label:'Huevo',action:'hunger',color:'#FFD700'},{emoji:'🍿',label:'Pochoclo',action:'hunger',color:'#FFD700'},
     {emoji:'🫙',label:'Frasco',action:null,color:'#87CEEB'},{emoji:'🧂',label:'Sal',action:null,color:'#FFFFFF'},
   ],
-  2: [ // Cuarto de Elroy
+  2: [ // Cuarto de Nano
     {emoji:'🔭',label:'Telescopio',action:'fun',color:'#4D96FF'},{emoji:'🚀',label:'Cohete Juguete',action:'fun',color:'#87CEEB'},
     {emoji:'🪐',label:'Saturno Modelo',action:'fun',color:'#C77DFF'},{emoji:'⭐',label:'Estrella Modelo',action:'fun',color:'#FFD700'},
     {emoji:'🤖',label:'Robot Juguete',action:'fun',color:'#00D4C8'},{emoji:'🎮',label:'Consola',action:'fun',color:'#4D96FF'},
@@ -140,7 +140,7 @@ const FURNITURE_BY_ROOM: Record<number, {emoji:string; label:string; action:Need
     {emoji:'🐶',label:'Perro Toy',action:'love',color:'#DEB887'},{emoji:'🐱',label:'Gato Toy',action:'love',color:'#FFA07A'},
     {emoji:'🦁',label:'León Toy',action:'love',color:'#FFD700'},{emoji:'🐻',label:'Oso Toy',action:'love',color:'#DEB887'},
   ],
-  3: [ // Cuarto de Judy
+  3: [ // Cuarto de Bibi
     {emoji:'💄',label:'Labial',action:null,color:'#FF6B9D'},{emoji:'👗',label:'Vestido',action:null,color:'#C77DFF'},
     {emoji:'👑',label:'Corona',action:null,color:'#FFD700'},{emoji:'🌸',label:'Flor Rosa',action:null,color:'#FFB3D1'},
     {emoji:'🪞',label:'Espejo',action:null,color:'#87CEEB'},{emoji:'💅',label:'Esmalte',action:null,color:'#FF69B4'},
@@ -308,12 +308,12 @@ for (let i = 0; i < 28; i++) {
 }
 const getRoomItems = (roomId: number) => FURNITURE_BY_ROOM[roomId] || SPECIAL_ROOMS[roomId] || DEFAULT_ROOM_ITEMS;
 
-/* ══ PERSONAJES SUPERSÓNICOS ══ */
+/* ══ PERSONAJES ORIGINALES (mismos que Planeta Tiqui) ══ */
 const CHARS_DEF = [
-  { name:'George', emoji:'👨‍💼', color:'#4D96FF', hair:0, top:0, acc:0 },
-  { name:'Jane',   emoji:'👩‍🦰', color:'#FF6B9D', hair:1, top:1, acc:1 },
-  { name:'Judy',   emoji:'👧‍🦰', color:'#C77DFF', hair:2, top:2, acc:2 },
-  { name:'Elroy',  emoji:'👦',  color:'#7CFC00', hair:3, top:3, acc:3 },
+  { name:'Tico', emoji:'👨‍💼', color:'#4D96FF', hair:0, top:0, acc:0 },
+  { name:'Mimi', emoji:'👩‍🦰', color:'#FF6B9D', hair:1, top:1, acc:1 },
+  { name:'Bibi', emoji:'👧‍🦰', color:'#C77DFF', hair:2, top:2, acc:2 },
+  { name:'Nano', emoji:'👦',  color:'#7CFC00', hair:3, top:3, acc:3 },
 ];
 const HAIR_OPTS   = ['👱','🧑‍🦱','👩‍🦰','🧑‍🦲','👩‍🦳','🧑‍🦱','👱‍♀️','🧑'];
 const TOP_OPTS    = ['👔','👗','🧥','👕','🎽','🥻','👘','🦺'];
