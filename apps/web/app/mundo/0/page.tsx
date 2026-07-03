@@ -35,13 +35,20 @@ interface BuildingItem {
 type Sticker  = {id:number; emoji:string; x:number; y:number; sz:number; rotation:number;};
 type Particle = {id:number; x:number; y:number; e:string;};
 
-/* ══ PERSONAJES DE PLANETA TIQUI (sin relación a ninguna franquicia) ══ */
+/* ══ PERSONAJES DE PLANETA TIQUI (sin relación a ninguna franquicia) ══
+   Nota honesta: los emojis no tienen variantes de color de ojos (no existe
+   en el estándar Unicode), así que esa parte de la descripción de cada
+   personaje no se puede representar con precisión acá. Sí se puede
+   aproximar el tono de piel. Para que Tizi/Coti/Zoe/Tito/Luta se vean
+   realmente como se describieron (ojos y pelo exactos), lo ideal es
+   generarles arte propio con OpenArt, igual que a ToqWow. */
 const CITIZENS_DEF = [
-  {name:'Tizi',   emoji:'👧', color:'#FF6B9D'},
-  {name:'Coti',   emoji:'👦', color:'#7CFC00'},
-  {name:'Zoe',    emoji:'👩', color:'#C77DFF'},
-  {name:'Luta',   emoji:'🧑', color:'#4D96FF'},
-  {name:'Tito',   emoji:'🐕', color:'#DEB887'},
+  {name:'Tizi',   emoji:'👧🏽', color:'#FF6B9D'},
+  {name:'Coti',   emoji:'👧🏻', color:'#4FC3F7'},
+  {name:'Zoe',    emoji:'👧🏻', color:'#C77DFF'},
+  {name:'Tito',   emoji:'👦🏻', color:'#7CFC00'},
+  {name:'Luta',   emoji:'👦🏾', color:'#4D96FF'},
+  {name:'Copo de Nieve', emoji:'🐶', color:'#DEB887'},
   {name:'ToqWow', img:'/toqwow-character-full.png', color:'#B8A9FF', isMascot:true},
 ];
 const HAIR_OPTS  = ['👱','🧑‍🦱','👩‍🦰','🧑‍🦲','👩‍🦳','🧑','👱‍♀️','🧑‍🦱'];
