@@ -921,10 +921,13 @@ export default function Mundo1() {
       el.scrollLeft = Math.max(0, Math.min(maxScroll, prevScroll + dir * speed));
       const aplicado = el.scrollLeft - prevScroll;
       if (aplicado !== 0) {
-        setDragPos(prev => {
-          const cur = prev[ds.key] || { x: 0, y: 0 };
-          return { ...prev, [ds.key]: { x: cur.x + aplicado, y: cur.y } };
-        });
+        // Se ajusta la BASE (startX), no el resultado final directamente. Asi, cuando
+        // onDragMove vuelva a calcular la posicion con su propia formula, va a partir
+        // de esta base ya corregida en vez de pisarla -- personaje y fondo quedan sincronizados.
+        ds.startX += aplicado;
+        const dx = ds.lastX - ds.startClientX;
+        const dy = ds.lastY - ds.startClientY;
+        setDragPos(prev => ({ ...prev, [ds.key]: { x: ds.startX + dx, y: ds.startY + dy } }));
       }
     }
     if (dragState.current && autoScrollDir.current !== 0) {
