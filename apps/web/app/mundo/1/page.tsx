@@ -817,6 +817,28 @@ export default function Mundo1() {
     return false;
   }, [collected, activarHotspot]);
 
+  const abrirMapaConSonido = useCallback(() => {
+    setShowMap(true);
+    melody([392, 523, 659], 90, 0.3, 0.15);
+    vib(15);
+    hablar('mapa');
+  }, []);
+
+  // Zona 0 "Puerta de Musgo": el tronco-mapa esta en left:22%, top:66% del contenedor de zona
+  const chequearTroncoMapa = useCallback((e: React.PointerEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const container = target.closest('[data-zona-container]') as HTMLElement | null;
+    if (!container) return;
+    const contRect = container.getBoundingClientRect();
+    const relX = (rect.left + rect.width / 2 - contRect.left) / contRect.width;
+    const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
+    const nativeX = relX * ZONA_WIDTH;
+    const nativeY = relY * ZONA_HEIGHT;
+    const dist = Math.hypot(nativeX - 0.22 * ZONA_WIDTH, nativeY - 0.66 * ZONA_HEIGHT);
+    if (dist < 260) abrirMapaConSonido();
+  }, [abrirMapaConSonido]);
+
   const onDragMove = useCallback((e: React.PointerEvent) => {
     const ds = dragState.current;
     if (!ds) return;
@@ -862,9 +884,10 @@ export default function Mundo1() {
         lastHoverCheckT.current[ds.key] = now;
         chequearHotspots(zoneOfKey, e);
         chequearPuntosTematicos(zoneOfKey, ds.key, e);
+        if (zoneOfKey === 0 && !showMap) chequearTroncoMapa(e);
       }
     }
-  }, [chequearHotspots, chequearPuntosTematicos]);
+  }, [chequearHotspots, chequearPuntosTematicos, chequearTroncoMapa, showMap]);
 
   const endDrag = useCallback((zi: number) => (e: React.PointerEvent) => {
     const ds = dragState.current;
@@ -886,13 +909,6 @@ export default function Mundo1() {
   const progreso = collected.size;
   const mundoCompleto = progreso === TOTAL_HOTSPOTS;
   const zonasCompletas = ZONAS.filter((_, zi) => zonaCompleta(zi)).length;
-
-  const abrirMapaConSonido = useCallback(() => {
-    setShowMap(true);
-    melody([392, 523, 659], 90, 0.3, 0.15);
-    vib(15);
-    hablar('mapa');
-  }, []);
 
   const irAZona = useCallback((zi: number) => {
     setShowMap(false);
@@ -1061,6 +1077,7 @@ export default function Mundo1() {
             {!(zi === 1 && (personajeActivo === 'tizi' || personajeActivo === 'coti')) && (
               <div style={{ position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19, transform: `translate(${dragPos[`${personajeActivo}-${zi}`]?.x || 0}px, ${dragPos[`${personajeActivo}-${zi}`]?.y || 0}px)` }}>
                 <div style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
                   animation: dragState.current?.key === `${personajeActivo}-${zi}`
                     ? 'none'
                     : floating[`${personajeActivo}-${zi}`]
@@ -1079,6 +1096,11 @@ export default function Mundo1() {
                         ? 'drop-shadow(0 10px 12px rgba(0,0,0,.45)) hue-rotate(-12deg) saturate(1.3)'
                         : 'drop-shadow(0 10px 12px rgba(0,0,0,.45))',
                     }} />
+                  <div style={{
+                    fontSize: '1.4vh', fontWeight: 700, color: 'white', textShadow: '0 1px 4px rgba(0,0,0,.8)',
+                    background: 'rgba(20,10,40,.6)', borderRadius: 8, padding: '1px 6px', marginTop: 2,
+                    whiteSpace: 'nowrap', pointerEvents: 'none',
+                  }}>{PERSONAJE_POR_ID[personajeActivo]?.nombre || 'Toqwow'}</div>
                 </div>
               </div>
             )}
