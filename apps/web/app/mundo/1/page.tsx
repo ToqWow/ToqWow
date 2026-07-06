@@ -347,7 +347,7 @@ const ZONA_WOW_COLOR: Record<number, string> = {
   3: 'rgba(150,220,255,.5)', 5: 'rgba(255,230,180,.55)', 6: 'rgba(255,150,200,.5)', 8: 'rgba(140,230,220,.5)',
 };
 
-type ActiveBurst = { id: number; x: number; y: number; zonaIdx: number; tipo?: 'sparkle' | 'splash'; emoji?: string; };
+type ActiveBurst = { id: number; x: number; y: number; zonaIdx: number; tipo?: 'sparkle' | 'splash' | 'tema'; emoji?: string; };
 
 export default function Mundo1() {
   const router = useRouter();
@@ -598,10 +598,11 @@ export default function Mundo1() {
         const id = ++burstId.current;
         const px = contRect.left + (punto.x / ZONA_WIDTH) * contRect.width;
         const py = contRect.top + (punto.y / ZONA_HEIGHT) * contRect.height;
-        setBursts(prev => [...prev, { id, x: px, y: py, zonaIdx: zi, tipo: 'sparkle', emoji: punto.emoji }]);
-        setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
+        setBursts(prev => [...prev, { id, x: px, y: py, zonaIdx: zi, tipo: 'tema', emoji: punto.emoji }]);
+        setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 1300);
         punto.sonido();
-        vib(punto.tipo === 'rumble' ? [10, 30, 10] : 15);
+        melody([440, 659, 880], 80, 0.25, 0.18);
+        vib(punto.tipo === 'rumble' ? [10, 30, 10] : [15, 20, 15]);
         if (punto.tipo === 'rumble') {
           setRumbleZona(zi);
           setTimeout(() => setRumbleZona(null), 350);
@@ -1107,37 +1108,45 @@ export default function Mundo1() {
               }}
             >🗺️</div>
 
-            {/* Personajes anfitriones: Toqwow + Tizi + Coti en la Arboleda (Zona 2) — arrastrables */}
-            {zi === 1 && (
-              <>
-                <div style={{ position: 'absolute', left: '38%', top: '58%', width: '9%', zIndex: 18, transform: `translate(${dragPos[`tizi-${zi}`]?.x || 0}px, ${dragPos[`tizi-${zi}`]?.y || 0}px)` }}>
-                  <div style={{ animation: dragState.current?.key === `tizi-${zi}` ? 'none' : 'charBounce 2.4s ease-in-out infinite' }}>
-                    <img
-                      src="/assets/mundo1/char_tizi_v3.png" alt="Tizi"
-                      onPointerDown={startDrag(`tizi-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
-                      draggable={false}
-                      style={{
-                        width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
-                        transform: squashTransform(`tizi-${zi}`), transition: 'transform .12s ease-out',
-                        filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
-                      }} />
+            {/* Personajes anfitriones en la Arboleda (Zona 2) — arrastrables.
+                Si el personaje elegido es Tizi o Coti, ese anfitrion rota a otro amigo
+                para no confundir (evita "quien de los dos soy yo"). */}
+            {zi === 1 && (() => {
+              const anfitrion1 = personajeActivo === 'tizi' ? PERSONAJE_POR_ID['zoe'] : PERSONAJE_POR_ID['tizi'];
+              const anfitrion1Id = personajeActivo === 'tizi' ? 'zoe' : 'tizi';
+              const anfitrion2 = personajeActivo === 'coti' ? PERSONAJE_POR_ID['puli'] : PERSONAJE_POR_ID['coti'];
+              const anfitrion2Id = personajeActivo === 'coti' ? 'puli' : 'coti';
+              return (
+                <>
+                  <div style={{ position: 'absolute', left: '38%', top: '58%', width: '9%', zIndex: 18, transform: `translate(${dragPos[`${anfitrion1Id}-${zi}`]?.x || 0}px, ${dragPos[`${anfitrion1Id}-${zi}`]?.y || 0}px)` }}>
+                    <div style={{ animation: dragState.current?.key === `${anfitrion1Id}-${zi}` ? 'none' : 'charBounce 2.4s ease-in-out infinite' }}>
+                      <img
+                        src={`/assets/mundo1/${anfitrion1?.src}`} alt={anfitrion1?.nombre}
+                        onPointerDown={startDrag(`${anfitrion1Id}-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                        draggable={false}
+                        style={{
+                          width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
+                          transform: squashTransform(`${anfitrion1Id}-${zi}`), transition: 'transform .12s ease-out',
+                          filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
+                        }} />
+                    </div>
                   </div>
-                </div>
-                <div style={{ position: 'absolute', left: '47%', top: '60%', width: '8.5%', zIndex: 17, transform: `translate(${dragPos[`coti-${zi}`]?.x || 0}px, ${dragPos[`coti-${zi}`]?.y || 0}px)` }}>
-                  <div style={{ animation: dragState.current?.key === `coti-${zi}` ? 'none' : 'charBounce 2.6s ease-in-out infinite .3s' }}>
-                    <img
-                      src="/assets/mundo1/char_coti_v3.png" alt="Coti"
-                      onPointerDown={startDrag(`coti-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
-                      draggable={false}
-                      style={{
-                        width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
-                        transform: squashTransform(`coti-${zi}`), transition: 'transform .12s ease-out',
-                        filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
-                      }} />
+                  <div style={{ position: 'absolute', left: '47%', top: '60%', width: '8.5%', zIndex: 17, transform: `translate(${dragPos[`${anfitrion2Id}-${zi}`]?.x || 0}px, ${dragPos[`${anfitrion2Id}-${zi}`]?.y || 0}px)` }}>
+                    <div style={{ animation: dragState.current?.key === `${anfitrion2Id}-${zi}` ? 'none' : 'charBounce 2.6s ease-in-out infinite .3s' }}>
+                      <img
+                        src={`/assets/mundo1/${anfitrion2?.src}`} alt={anfitrion2?.nombre}
+                        onPointerDown={startDrag(`${anfitrion2Id}-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                        draggable={false}
+                        style={{
+                          width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
+                          transform: squashTransform(`${anfitrion2Id}-${zi}`), transition: 'transform .12s ease-out',
+                          filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
+                        }} />
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
+                </>
+              );
+            })()}
 
             {zona.hotspots.map((h, hi) => {
               const key = `${zi}-${hi}`;
@@ -1186,8 +1195,9 @@ export default function Mundo1() {
 
             {/* Companero flotante: el personaje que el nino eligio. Existe en UNA sola zona a la vez
                 (zonaCompanero) — no una copia en cada zona, para que tenga sentido "ir a buscarlo".
-                Si eligio a Tizi o Coti, en la Arboleda (zi===1) no se duplica: ya estan ahi como anfitriones fijos. */}
-            {zi === zonaCompanero && !(zi === 1 && (personajeActivo === 'tizi' || personajeActivo === 'coti')) && (
+                En la Arboleda los anfitriones fijos rotan automaticamente si coinciden con el
+                personaje elegido, asi que aca no hace falta ninguna exclusion especial. */}
+            {zi === zonaCompanero && (
               <div style={{ position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19, transform: `translate(${dragPos[`${personajeActivo}-${zi}`]?.x || 0}px, ${dragPos[`${personajeActivo}-${zi}`]?.y || 0}px)` }}>
                 <div style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -1299,8 +1309,8 @@ export default function Mundo1() {
             {bursts.filter(b => b.zonaIdx === zi).map(b => (
               <div key={b.id} style={{
                 position: 'fixed', left: b.x, top: b.y, transform: 'translate(-50%,-50%)',
-                fontSize: b.tipo === 'splash' ? 44 : 34, pointerEvents: 'none', zIndex: 70,
-                animation: b.tipo === 'splash' ? 'splashRing .9s ease-out forwards' : 'burstUp .9s ease-out forwards',
+                fontSize: b.tipo === 'splash' ? 44 : b.tipo === 'tema' ? 52 : 34, pointerEvents: 'none', zIndex: 70,
+                animation: b.tipo === 'splash' ? 'splashRing .9s ease-out forwards' : b.tipo === 'tema' ? 'temaCelebra 1.3s ease-out forwards' : 'burstUp .9s ease-out forwards',
               }}>{b.emoji || (b.tipo === 'splash' ? '💦' : '✨')}</div>
             ))}
           </div>
@@ -1499,6 +1509,7 @@ export default function Mundo1() {
         @keyframes guideFloat { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-14px); } }
         @keyframes burstUp { 0%{ opacity: 1; transform: translate(-50%,-50%) scale(.5); } 100%{ opacity: 0; transform: translate(-50%,-160%) scale(1.6); } }
         @keyframes splashRing { 0%{ opacity: 1; transform: translate(-50%,-50%) scale(.3); } 60%{ opacity: 1; transform: translate(-50%,-50%) scale(1.4); } 100%{ opacity: 0; transform: translate(-50%,-50%) scale(1.9); } }
+        @keyframes temaCelebra { 0%{ opacity: 0; transform: translate(-50%,-50%) scale(.2) rotate(-15deg); } 25%{ opacity: 1; transform: translate(-50%,-50%) scale(1.35) rotate(8deg); } 45%{ transform: translate(-50%,-50%) scale(1.05) rotate(-4deg); } 75%{ opacity: 1; transform: translate(-50%,-65%) scale(1.15) rotate(0deg); } 100%{ opacity: 0; transform: translate(-50%,-140%) scale(1.3); } }
         @keyframes zonaCelebra { 0%{ opacity: 0; } 25%{ opacity: 1; } 100%{ opacity: 0; } }
         @keyframes trailFade { 0%{ opacity: .9; transform: translate(-50%,-50%) scale(.6); } 40%{ opacity: .8; transform: translate(-50%,-50%) scale(1); } 100%{ opacity: 0; transform: translate(-50%,-50%) scale(.8) translateY(6px); } }
         @keyframes rockRumble { 0%,100%{ transform: translateX(0); } 20%{ transform: translateX(-4px) translateY(2px); } 40%{ transform: translateX(4px) translateY(-2px); } 60%{ transform: translateX(-3px); } 80%{ transform: translateX(3px); } }
