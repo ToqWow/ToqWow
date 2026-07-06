@@ -361,6 +361,7 @@ export default function Mundo1() {
   const [mostrarPresentacion, setMostrarPresentacion] = useState(false);
   const [presentacionIdx, setPresentacionIdx] = useState(0);
   const [personajeActivo, setPersonajeActivo] = useState<string>('toqwow');
+  const [zonaCompanero, setZonaCompanero] = useState<number>(0); // en que zona esta parado el personaje (una sola, no en todas a la vez)
   const [showMap, setShowMap] = useState(false);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [portalNudge, setPortalNudge] = useState(false);
@@ -497,6 +498,8 @@ export default function Mundo1() {
     dragState.current = { key, startClientX: e.clientX, startClientY: e.clientY, startX: current.x, startY: current.y, lastX: e.clientX, lastY: e.clientY, lastT: now, vx: 0, vy: 0 };
     setSquash(prev => ({ ...prev, [key]: 'grab' }));
     setPersonajeActivo(key.slice(0, key.lastIndexOf('-')));
+    const ziDeKey = parseInt(key.slice(key.lastIndexOf('-') + 1), 10);
+    if (!Number.isNaN(ziDeKey)) setZonaCompanero(ziDeKey);
     delete yaReaccionoEnDrag.current[key];
     mapHoverStartT.current = null;
     note(660, 0.15, 0.15); vib(10);
@@ -841,9 +844,11 @@ export default function Mundo1() {
     if (!el) return;
     const target = el.children[zi] as HTMLElement;
     target?.scrollIntoView({ behavior: 'smooth', inline: 'start' });
-    // El personaje elegido "viaja con vos": llega limpio (sin offsets viejos) y se resalta
+    // El personaje elegido "viaja con vos": deja de existir en la zona anterior y
+    // aparece limpio (sin offsets viejos) en la zona elegida, resaltado.
     const key = `${personajeActivo}-${zi}`;
     setDragPos(prev => ({ ...prev, [key]: { x: 0, y: 0 } }));
+    setZonaCompanero(zi);
     setTimeout(() => {
       note(880, 0.15, 0.15);
       vib(15);
@@ -1181,9 +1186,10 @@ export default function Mundo1() {
               />
             </button>
 
-            {/* Companero flotante: el personaje que el nino eligio, presente en las 10 zonas — arrastrable, con reaccion al agua.
+            {/* Companero flotante: el personaje que el nino eligio. Existe en UNA sola zona a la vez
+                (zonaCompanero) — no una copia en cada zona, para que tenga sentido "ir a buscarlo".
                 Si eligio a Tizi o Coti, en la Arboleda (zi===1) no se duplica: ya estan ahi como anfitriones fijos. */}
-            {!(zi === 1 && (personajeActivo === 'tizi' || personajeActivo === 'coti')) && (
+            {zi === zonaCompanero && !(zi === 1 && (personajeActivo === 'tizi' || personajeActivo === 'coti')) && (
               <div style={{ position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19, transform: `translate(${dragPos[`${personajeActivo}-${zi}`]?.x || 0}px, ${dragPos[`${personajeActivo}-${zi}`]?.y || 0}px)` }}>
                 <div style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -1219,7 +1225,7 @@ export default function Mundo1() {
             )}
 
             {/* Amigos convocados desde la bandeja, presentes en la zona donde fueron llamados */}
-            {AMIGOS_EXTRA.filter(a => amigosEnJuego[a.id] === zi && a.id !== personajeActivo).map((amigo, ai) => {
+            {AMIGOS_EXTRA.filter(a => amigosEnJuego[a.id] === zi && !(a.id === personajeActivo && zi === zonaCompanero)).map((amigo, ai) => {
               const key = `${amigo.id}-${zi}`;
               return (
                 <div key={amigo.id} style={{
