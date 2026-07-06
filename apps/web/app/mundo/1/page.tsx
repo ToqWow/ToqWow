@@ -672,12 +672,10 @@ export default function Mundo1() {
 
 
   // Presentacion inicial: Toqwow nombra a los 10 personajes disponibles desde el dia 1,
-  // una sola vez por dispositivo. El nino puede cambiar de personaje activo en cualquier
-  // zona despues (bandeja + Tizi/Coti/Toqwow siempre presentes).
+  // cada vez que se entra a Mundo 1. El nino puede cambiar de personaje activo en
+  // cualquier zona despues (bandeja + Tizi/Coti siempre presentes).
   useEffect(() => {
-    const forzar = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('presentar') === '1';
-    const yaPresentado = typeof window !== 'undefined' && window.localStorage.getItem('toqwow_personajes_presentados');
-    setMostrarPresentacion(forzar || !yaPresentado);
+    setMostrarPresentacion(true);
   }, []);
 
   useEffect(() => {
@@ -707,7 +705,6 @@ export default function Mundo1() {
     if (idElegido) setPersonajeActivo(idElegido);
     melody([440, 554, 659, 880], 90, 0.3, 0.2);
     vib([15, 20, 15, 30]);
-    try { window.localStorage.setItem('toqwow_personajes_presentados', '1'); } catch {}
     setTimeout(() => hablar('bienvenida'), 500);
   }, []);
 
