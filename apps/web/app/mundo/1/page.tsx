@@ -32,7 +32,7 @@ const ZONAS: Zona[] = [
 
 const TOTAL_HOTSPOTS = ZONAS.reduce((acc, z) => acc + z.hotspots.length, 0);
 
-type ActiveBurst = { id: number; x: number; y: number; zonaIdx: number; };
+type ActiveBurst = { id: number; x: number; y: number; zonaIdx: number; tipo?: 'sparkle' | 'splash'; };
 
 export default function Mundo1() {
   const router = useRouter();
@@ -106,11 +106,21 @@ export default function Mundo1() {
     const container = target.closest('[data-zona-container]') as HTMLElement | null;
     if (!container) return;
     const contRect = container.getBoundingClientRect();
+    const relX = (rect.left + rect.width / 2 - contRect.left) / contRect.width;
     const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
-    const enAgua = relY > 0.55 && relY < 0.9;
+    const enAgua = relY > 0.42;
+    const yaFlotando = !!floating[key];
     setFloating(prev => ({ ...prev, [key]: enAgua }));
-    if (enAgua) { melody([392, 330, 392], 120, 0.3, 0.15); vib([15, 20, 15]); }
-  }, []);
+    if (enAgua && !yaFlotando) {
+      const id = ++burstId.current;
+      setBursts(prev => [...prev, { id, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, zonaIdx: zi, tipo: 'splash' }]);
+      setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
+      melody([392, 330, 262], 110, 0.35, 0.2);
+      vib([15, 20, 15, 30]);
+    } else if (!enAgua && yaFlotando) {
+      note(440, 0.15, 0.15);
+    }
+  }, [floating]);
 
   const endDrag = useCallback((zi: number) => (e: React.PointerEvent) => {
     const ds = dragState.current;
@@ -142,16 +152,28 @@ export default function Mundo1() {
     try { window.localStorage.setItem('toqwow_mundo1_tutorial_visto', '1'); } catch {}
   }, []);
 
+  const [zonaCelebrando, setZonaCelebrando] = useState<number | null>(null);
+
   const activarHotspot = useCallback((zonaIdx: number, hIdx: number, x: number, y: number) => {
     const key = `${zonaIdx}-${hIdx}`;
     setCollected(prev => {
       if (prev.has(key)) return prev;
       const next = new Set(prev);
       next.add(key);
+      const zonaYaCompletaba = ZONAS[zonaIdx].hotspots.every((_, hi) => next.has(`${zonaIdx}-${hi}`));
+      const zonaYaEstabaCompleta = ZONAS[zonaIdx].hotspots.every((_, hi) => prev.has(`${zonaIdx}-${hi}`));
+      if (zonaYaCompletaba && !zonaYaEstabaCompleta) {
+        setTimeout(() => {
+          setZonaCelebrando(zonaIdx);
+          melody([523, 659, 784, 1046], 130, 0.4, 0.22);
+          vib([20, 30, 20, 30, 60]);
+          setTimeout(() => setZonaCelebrando(null), 1800);
+        }, 200);
+      }
       return next;
     });
     const id = ++burstId.current;
-    setBursts(prev => [...prev, { id, x, y, zonaIdx }]);
+    setBursts(prev => [...prev, { id, x, y, zonaIdx, tipo: 'sparkle' }]);
     setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
     melody([523, 659, 784]);
     vib(20);
@@ -290,7 +312,7 @@ export default function Mundo1() {
                   }}
                 >
                   <img
-                    src="/assets/mundo1/hotspot_icon_v3.png"
+                    src="/assets/mundo1/hotspot_icon_v4.png"
                     alt=""
                     style={{
                       width: '100%', height: '100%', display: done ? 'none' : 'block',
@@ -305,7 +327,7 @@ export default function Mundo1() {
             {/* Guia luciernaga: solo en la primera zona con hotspots (Zona 2, indice 1), primera visita */}
             {zi === 1 && showGuide && (
               <img
-                src="/assets/mundo1/guia_luciernaga_v3.png"
+                src="/assets/mundo1/guia_luciernaga_v4.png"
                 alt="Luciérnaga guía"
                 style={{
                   position: 'absolute',
@@ -357,12 +379,22 @@ export default function Mundo1() {
               </button>
             )}
 
+            {/* Destello de celebracion al completar esta zona */}
+            {zonaCelebrando === zi && (
+              <div style={{
+                position: 'absolute', inset: 0, zIndex: 40, pointerEvents: 'none',
+                background: 'radial-gradient(circle, rgba(255,220,150,.55), rgba(255,220,150,0) 70%)',
+                animation: 'zonaCelebra 1.8s ease-out forwards',
+              }} />
+            )}
+
             {/* Bursts de recompensa */}
             {bursts.filter(b => b.zonaIdx === zi).map(b => (
               <div key={b.id} style={{
                 position: 'fixed', left: b.x, top: b.y, transform: 'translate(-50%,-50%)',
-                fontSize: 34, pointerEvents: 'none', zIndex: 70, animation: 'burstUp .9s ease-out forwards',
-              }}>✨</div>
+                fontSize: b.tipo === 'splash' ? 44 : 34, pointerEvents: 'none', zIndex: 70,
+                animation: b.tipo === 'splash' ? 'splashRing .9s ease-out forwards' : 'burstUp .9s ease-out forwards',
+              }}>{b.tipo === 'splash' ? '💦' : '✨'}</div>
             ))}
           </div>
         ))}
@@ -423,6 +455,8 @@ export default function Mundo1() {
         @keyframes hotspotPulse { 0%,100%{ transform: scale(1); opacity: 1; } 50%{ transform: scale(1.18); opacity: .75; } }
         @keyframes guideFloat { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-14px); } }
         @keyframes burstUp { 0%{ opacity: 1; transform: translate(-50%,-50%) scale(.5); } 100%{ opacity: 0; transform: translate(-50%,-160%) scale(1.6); } }
+        @keyframes splashRing { 0%{ opacity: 1; transform: translate(-50%,-50%) scale(.3); } 60%{ opacity: 1; transform: translate(-50%,-50%) scale(1.4); } 100%{ opacity: 0; transform: translate(-50%,-50%) scale(1.9); } }
+        @keyframes zonaCelebra { 0%{ opacity: 0; } 25%{ opacity: 1; } 100%{ opacity: 0; } }
         @keyframes charBounce { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-6%); } }
         @keyframes floatWater { 0%,100%{ transform: translateY(0) rotate(-3deg); } 50%{ transform: translateY(-4%) rotate(3deg); } }
         @keyframes mapPulse { 0%,100%{ transform: translate(-50%,-50%) scale(1); } 50%{ transform: translate(-50%,-50%) scale(1.1); } }
