@@ -39,6 +39,9 @@ export default function Mundo1() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [collected, setCollected] = useState<Set<string>>(new Set());
   const [bursts, setBursts] = useState<ActiveBurst[]>([]);
+  const [trail, setTrail] = useState<{ id: number; x: number; y: number }[]>([]);
+  const trailId = useRef(0);
+  const lastTrailT = useRef<Record<string, number>>({});
   const [showGuide, setShowGuide] = useState(true);
   const [showMap, setShowMap] = useState(false);
   const [portalNudge, setPortalNudge] = useState(false);
@@ -78,6 +81,18 @@ export default function Mundo1() {
     const dx = e.clientX - ds.startClientX;
     const dy = e.clientY - ds.startClientY;
     setDragPos(prev => ({ ...prev, [ds.key]: { x: ds.startX + dx, y: ds.startY + dy } }));
+
+    // Zona 1 "Puerta de Musgo": rastro de florcitas al pasar bajo el arco
+    const zoneOfKey = parseInt(ds.key.split('-').pop() || '-1', 10);
+    if (zoneOfKey === 0) {
+      const lastT = lastTrailT.current[ds.key] || 0;
+      if (now - lastT > 90) {
+        lastTrailT.current[ds.key] = now;
+        const id = ++trailId.current;
+        setTrail(prev => [...prev.slice(-14), { id, x: e.clientX, y: e.clientY }]);
+        setTimeout(() => setTrail(prev => prev.filter(t => t.id !== id)), 750);
+      }
+    }
   }, []);
 
   const coast = useCallback((key: string, vx: number, vy: number) => {
@@ -400,6 +415,14 @@ export default function Mundo1() {
         ))}
       </div>
 
+      {/* Rastro de florcitas de musgo (Zona 1, al pasar bajo el arco) */}
+      {trail.map(t => (
+        <div key={t.id} style={{
+          position: 'fixed', left: t.x, top: t.y, transform: 'translate(-50%,-50%)',
+          fontSize: 18, pointerEvents: 'none', zIndex: 65, animation: 'trailFade .75s ease-out forwards',
+        }}>🌼</div>
+      ))}
+
       {/* Indicador de scroll sutil */}
       <div style={{ position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 60, fontSize: 11, color: 'rgba(255,255,255,.45)', background: 'rgba(20,10,40,.4)', padding: '4px 12px', borderRadius: 20 }}>
         ⟵ Deslizá para explorar el bosque ⟶
@@ -457,6 +480,7 @@ export default function Mundo1() {
         @keyframes burstUp { 0%{ opacity: 1; transform: translate(-50%,-50%) scale(.5); } 100%{ opacity: 0; transform: translate(-50%,-160%) scale(1.6); } }
         @keyframes splashRing { 0%{ opacity: 1; transform: translate(-50%,-50%) scale(.3); } 60%{ opacity: 1; transform: translate(-50%,-50%) scale(1.4); } 100%{ opacity: 0; transform: translate(-50%,-50%) scale(1.9); } }
         @keyframes zonaCelebra { 0%{ opacity: 0; } 25%{ opacity: 1; } 100%{ opacity: 0; } }
+        @keyframes trailFade { 0%{ opacity: .9; transform: translate(-50%,-50%) scale(.6); } 40%{ opacity: .8; transform: translate(-50%,-50%) scale(1); } 100%{ opacity: 0; transform: translate(-50%,-50%) scale(.8) translateY(6px); } }
         @keyframes charBounce { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-6%); } }
         @keyframes floatWater { 0%,100%{ transform: translateY(0) rotate(-3deg); } 50%{ transform: translateY(-4%) rotate(3deg); } }
         @keyframes mapPulse { 0%,100%{ transform: translate(-50%,-50%) scale(1); } 50%{ transform: translate(-50%,-50%) scale(1.1); } }
