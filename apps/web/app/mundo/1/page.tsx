@@ -985,7 +985,7 @@ export default function Mundo1() {
         lastHoverCheckT.current[ds.key] = now;
         chequearHotspots(zoneOfKey, e);
         chequearPuntosTematicos(zoneOfKey, ds.key, e);
-        if (zoneOfKey === 0 && !showMap) chequearTroncoMapa(e);
+        if (!showMap) chequearTroncoMapa(e);
       }
     }
 
@@ -1093,21 +1093,19 @@ export default function Mundo1() {
               style={{ objectFit: 'cover', objectPosition: 'center' }}
             />
 
-            {/* Tronco-mapa en la entrada (Zona 1) — decorativo: se abre al pasar el personaje encima.
-                Ubicado arriba a la izquierda para no interponerse en el camino natural hacia la Zona 2. */}
-            {zi === 0 && (
-              <div
-                aria-hidden="true"
-                style={{
-                  position: 'absolute', left: '13%', top: '16%', transform: 'translate(-50%,-50%)',
-                  width: '11%', aspectRatio: '1/1', borderRadius: '50%', border: '5px solid rgba(255,215,120,.9)',
-                  background: 'radial-gradient(circle, rgba(255,215,120,.45), rgba(255,215,120,.08))',
-                  boxShadow: '0 0 30px rgba(255,215,120,.6)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '4vh',
-                  pointerEvents: 'none', zIndex: 22, animation: 'mapPulse 2s ease-in-out infinite',
-                }}
-              >🗺️</div>
-            )}
+            {/* Circulo del mapa — presente en TODAS las zonas (arriba a la izquierda), para poder
+                abrir el mapa arrastrando al personaje sin importar en que zona este parado. */}
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute', left: '13%', top: '16%', transform: 'translate(-50%,-50%)',
+                width: '11%', aspectRatio: '1/1', borderRadius: '50%', border: '5px solid rgba(255,215,120,.9)',
+                background: 'radial-gradient(circle, rgba(255,215,120,.45), rgba(255,215,120,.08))',
+                boxShadow: '0 0 30px rgba(255,215,120,.6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '4vh',
+                pointerEvents: 'none', zIndex: 22, animation: 'mapPulse 2s ease-in-out infinite',
+              }}
+            >🗺️</div>
 
             {/* Personajes anfitriones: Toqwow + Tizi + Coti en la Arboleda (Zona 2) — arrastrables */}
             {zi === 1 && (
