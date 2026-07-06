@@ -5,78 +5,131 @@
 > hay que leer primero al retomar sesión. Todo lo que sigue después (Identidad
 > del proyecto, Stack tecnológico, Arquitectura de carga, Prisma, agentes IA,
 > panel admin, etc.) es el **documento de visión/roadmap original**, escrito
-> antes de empezar a codear. Varias decisiones ahí (PixiJS, Zustand, Capacitor,
-> Prisma, 27 idiomas desde día 1) todavía NO están implementadas — el desarrollo
-> real tomó un camino más simple (React/Next.js puro, sin motor de juego
-> separado) para poder iterar rápido en Mundo 0. Cuando haya conflicto entre
-> las dos secciones, la realidad es la que manda.
+> antes de empezar a codear. Cuando haya conflicto entre las dos secciones,
+> la realidad es la que manda.
 
 ---
 
-## 🟢 ESTADO REAL DE IMPLEMENTACIÓN (actualizado 3 julio 2026, commit `fbf8194d`)
+## 🟢 ESTADO REAL DE IMPLEMENTACIÓN (actualizado 6 julio 2026, commit `62d83db0`)
 
-### Qué existe hoy
+### Resumen ejecutivo
 
-- **Repo:** `ToqWow/ToqWow`, rama `main`. Deploy automático en Vercel (toqwow.com) en cada push. Backend en Render (existe pero Mundo 0 no lo usa todavía — todo el estado del juego vive en memoria del cliente, sin persistencia).
-- **Stack real de Mundo 0:** Next.js 14 (App Router) + React puro, **sin** PixiJS ni Zustand. Todo el juego de Mundo 0 vive en un solo archivo: `apps/web/app/mundo/0/page.tsx` (~650 líneas), con estilos inline (CSS-in-JS por objeto `style={{}}`) y `<style>` con `@keyframes` al final del componente. Assets de imagen en `apps/web/public/` (`planeta-tiqui-bg.jpg`, `toqwow-character-full.png`).
-- **Mundo 0 — Planeta Tiqui:** único mundo terminado y jugable. Fondo ilustrado real (generado con OpenArt AI), scroll horizontal a pantalla completa, 9 zonas interactivas (casas, hamaca, pileta, puestos de golosinas, cocina, escenario, garaje de cohete, jardín).
-- **Mundo 1, 2 y 3** (Dinos del Espacio, Bosque Encantado, Casa Galáctica): existen como código pero son la versión **vieja** — SVG/emoji proceduralmente generado, estética "Supersónicos" (ya despojada de referencias directas a la franquicia pero visualmente sigue siendo la versión anterior a la reescritura de Mundo 0). **No** tienen el rediseño sin-texto ni el sistema de progreso/zonas que sí tiene Mundo 0. Están pendientes del mismo tratamiento.
+Esta sesión reconstruyó **Mundo 1 completo** (antes "Dinos del Espacio" con emojis, ahora "Bosque de las Luciérnagas Doradas" con arte real ilustrado, 10 zonas explorables, los 10 personajes jugables, física de arrastre, voz guiada multiidioma y eventos ¡WOW!). Mundo 0, 2 y 3 **no se tocaron** en esta sesión — siguen como estaban.
 
-### Personajes actuales (Mundo 0)
+### Mundo 1 — Bosque de las Luciérnagas Doradas (reconstruido de punta a punta)
 
-7 personajes jugables, todos con sistema de necesidades (hambre/sueño/diversión/baño/amor) salvo ToqWow:
+**Archivo:** `apps/web/app/mundo/1/page.tsx` (~950 líneas). **Assets:** `apps/web/public/assets/mundo1/`.
 
-| Nombre | Rol | Apariencia real en el juego |
-|---|---|---|
-| Tizi | niña | emoji 👧🏽 (tono de piel medio) |
-| Coti | niña | emoji 👧🏻 (tono de piel claro) |
-| Zoe | niña | emoji 👧🏻 |
-| Tito | varón | emoji 👦🏻 |
-| Luta | varón | emoji 👦🏾 (tono de piel oscuro) |
-| Copo de Nieve | perrito (pug) | emoji 🐶 — no existe emoji de pug en Unicode |
-| ToqWow | mascota jugable | imagen PNG de cuerpo completo (`toqwow-character-full.png`), **sigue con el fondo azul rectangular sin quitar** |
+**Arte de fondo:** 10 zonas generadas con OpenArt AI (Nano Banana Pro), cada una a 2752×1536px, unidas conceptualmente vía "Expand Image" (aunque la detección automática de solapamiento entre zonas dio baja confianza — no hay costura pixel-perfect, cada zona es un tile independiente servido en WebP). Las 10 zonas, en orden de scroll:
 
-**Limitación importante y ya comunicada a Jesús:** los emojis no soportan color de ojos (no existe en Unicode) ni texturas de pelo específicas (rulos, castaño claro, etc.) de forma fiable — lo implementado es la mejor aproximación posible (tono de piel + elección de emoji), no lo que Jesús pidió literalmente. La solución real pendiente es generar arte propio de cada personaje con OpenArt (ver sección OpenArt abajo).
+1. Puerta de Musgo (entrada, tronco-mapa)
+2. Arboleda de las Luciérnagas (Toqwow+Tizi+Coti hosts)
+3. Aldea de los Hongos (4 casitas-hongo)
+4. Puente de Raíces
+5. Arroyo Brillante (zona de agua — mecánica de flotar)
+6. Jardín de Rocío
+7. Mercado de Luz
+8. Roquedal de Musgo
+9. Boca de la Cueva
+10. Mirador de la Luna (portal de salida a `/mundo/2`, gateado por progreso)
 
-### Mecánicas implementadas en Mundo 0
+Archivos: `zona_01_puerta_musgo.webp` … `zona_10_mirador_luna.webp`, más `map/thumb_01…10.webp` (miniaturas para el mapa del tesoro).
 
-- **Sin pestañas de texto.** Bandeja única abajo: fila de avatares de personajes (tap = selecciona + saluda + desliza el mundo hasta ahí) + fila de stickers (drag-and-drop al mundo). Los objetos (comida/juguetes) ya viven sueltos en el mundo, siempre arrastrables, sin necesitar activar ningún "modo".
-- **Reacción universal:** tocar cualquier personaje en cualquier momento dispara rebote + sonido + globito, sin depender de contexto.
-- **Brillo-guía dorado:** el personaje con la necesidad más urgente y el objeto que la resuelve se iluminan juntos (sin palabras).
-- **Mano tutorial** (👆, solo primera visita, vía `localStorage`, desaparece con el primer toque real).
-- **Sistema de zonas con efecto/sonido/vibración/puntos:** acercar (arrastrar) un personaje a cualquiera de las 9 zonas, o entregarle ahí el objeto correcto, dispara sonido+vibración+partículas+puntos. Primera vez que se descubre una zona = fanfarria grande; repeticiones = chispazo chico. Puntitos de progreso (fila de círculos dorados) arriba, contador de estrellas (⭐+número) junto al título.
-- **Mundo completo → pasar al siguiente:** al descubrir las 9 zonas se dispara una celebración (🏆✨🎉) con un botón único (flecha ➡️, sin texto) que navega a `/mundo/1`. Después de la primera vez queda un botón flotante permanente (guardado en `localStorage` como `tq_m0_world_complete`) para ir al siguiente mundo cuando quieran.
-- **Personalización:** ropa (28 opciones: básicas + uniformes de oficios + disfraces) y sombreros/accesorios de cabeza (23 opciones: sombreros, vinchas/moños, orejitas y cosas "wow" como cuerno de unicornio o antenitas alien). Proporciones ajustadas (se superponen sobre cabeza/cuerpo en vez de flotar separados con hueco). ToqWow no es personalizable (personaje fijo).
+**Los 10 personajes jugables**, todos con PNG transparente en `char_*.png`:
+Toqwow (presente y arrastrable en las 10 zonas, compañero flotante), Tizi + Coti (fijos en Zona 2), y **Zoe, Puli, Tito, Luta, Copo de Nieve, Vago, Michi** convocables desde una bandeja inferior (tocás su ícono → aparece en la zona donde estés parado, queda arrastrable).
 
-### Bugs reales ya resueltos en esta sesión (para no repetirlos)
+⚠️ **Lección aprendida sobre transparencia (importante para futuros personajes):** OpenArt/el flujo de descarga no entrega canal alfa real — entrega RGB con un patrón de cuadritos gris horneado como píxeles opacos. Hay un script de limpieza en el historial de esta sesión (`remove_checkerboard_conservador`, basado en componentes conexos con el borde) que es el método **seguro**: solo borra fondo conectado al borde de la imagen. **Nunca usar** una variante que borre "manchas grandes de tono uniforme sin importar conexión al borde" — esa variante (v4) le hizo agujeros reales de hasta 13% de la imagen a Michi y Vago porque confundió su propio pelaje blanco/negro con el patrón de fondo. Regla: para personajes con parches grandes blanco/negro, usar siempre el método conservador aunque deje algunas motitas residuales chicas (mejor eso que agujeros).
 
-1. **Scroll horizontal no llegaba al borde izquierdo en vertical:** causado por `justifyContent:'center'` en el contenedor de scroll (la mitad izquierda del contenido caía en `scrollLeft` negativo, inalcanzable). Se sacó ese `justifyContent`.
-2. **Botones tapados/no clickeables (Objetos, Decorar, etc. en la versión vieja con pestañas):** los personajes/objetos del mundo tenían z-index más alto que las barras UI, y el contenedor del mundo no tenía `isolation:'isolate'`, así que se "filtraban" por encima de los botones. Se agregó `isolation:'isolate'` al contenedor del mundo y se subió el z-index de las barras UI a 300 (modal de personalizar a 400).
-3. **Horizontal cortado por la barra del navegador móvil:** `100vh` no descuenta la UI del navegador en móvil. Se usa una clase `.tq-m0-root{height:100vh;height:100dvh;}` (fallback progresivo).
-4. **Deploys que fallaban silenciosamente en Vercel (Jesús veía la versión vieja sin saber por qué):** dos builds seguidos fallaron por errores de TypeScript en modo `strict` que no rompen nada en tiempo de ejecución pero sí bloquean `next build`. Causa raíz: patrones `let x: T|null = null; algo.forEach(...) => { x = {...} }` — TypeScript **no propaga el tipo asignado dentro de un closure/forEach** hacia el `return` de la función contenedora en modo estricto, así que el tipo inferido colapsa a `null`/`never` en vez de `T|null`. **Regla para el futuro: usar `for...of` en vez de `.forEach()` cuando se reasigna una variable `let` tipada como unión con `null` dentro del loop** — con `for...of` sí se narrows correctamente. También evitar `!!variable && variable.propiedad` (el `!!` rompe el narrowing de TypeScript); usar `variable && variable.propiedad` o `if(variable){...}` directo.
-   **Antes de dar por bueno un push, correr localmente:** `npx tsc --noEmit` con el `tsconfig.json` real del proyecto (`strict:true`), no solo `esbuild` (esbuild transpila pero no chequea tipos, por eso los errores pasaban desapercibidos localmente).
-5. **Intento de quitar el fondo azul de ToqWow con `rembg` (IA) falló:** el entorno de este Claude tiene la red restringida a una lista blanca de dominios, y el modelo `u2net.onnx` se descarga desde `release-assets.githubusercontent.com`, que NO está permitido (solo `github.com`, `raw.githubusercontent.com`, `codeload.github.com`). El intento manual de reemplazo (flood-fill de color por BFS) cortó brazos y antenas — descartado. **Pendiente:** pedirle fondo transparente directamente a OpenArt al regenerar la imagen, o usar su herramienta de "remove background" integrada.
+**Sistema de física de arrastre (transversal, reutilizable):**
+- Inercia con fricción al soltar (`coast()`, decae velocidad ~0.9/frame vía `requestAnimationFrame`)
+- Squash & stretch al agarrar/soltar (`squashTransform()`)
+- Arquitectura de 3 capas por personaje (contenedor con `transform: translate` del arrastre → capa con animación CSS de idle/bounce → imagen con squash) para que el `transform` del drag y la `animation` CSS de rebote no se pisen entre sí (bug real encontrado y corregido esta sesión).
 
-### OpenArt AI — plan de generación de imágenes (pendiente de ejecutar)
+**Hotspots y progreso:** 27 "luces" repartidas en las 10 zonas (`ZONAS[].hotspots`). Completar todas las de una zona dispara celebración + Factor WOW de esa zona. Completar las 27 activa el portal en Zona 10.
 
-Jesús va a pagar el plan **Essential** de OpenArt (~4,000 créditos/mes, ~$12-14/mes según región). Ya se le explicó:
-- Los créditos no acumulan mes a mes — hay que generar todo dentro de la ventana de 30 días.
-- Usar resolución/calidad **estándar** (1 crédito/imagen) para que las 4,000 imágenes alcancen para los 4 mundos de 366 días combinados; alta calidad consume 2-4 créditos y no va a alcanzar.
-- Prompts para Bulk Create (hasta 500 por tanda, sube `.csv`/`.txt`) ya se generaron una vez para los 366 mundos (`toqwow_openart_prompts.json`, `toqwow_prompts_bulk.csv/.txt` — no se sabe si Jesús los conserva, revisar antes de regenerar) con cláusula de originalidad (prohíbe imitar Toca Boca/Avatar World, traduce inspiración cinematográfica genérica sin nombrar franquicias).
-- Personaje `@ToqWow` ya entrenado como Consistent Character en la cuenta de OpenArt de Jesús.
+**Mapa del tesoro:** botón "🗺️ Mapa del Bosque" en la barra superior + tronco-mapa en Zona 1. Grid de 10 miniaturas, estrella dorada cuando una zona está completa, tap para saltar ahí con scroll suave.
 
-**Próximo paso acordado con Jesús (todavía no ejecutado):** generar 7 retratos de personajes (Tizi, Coti, Zoe, Tito, Luta, Copo de Nieve, ToqWow con fondo transparente) con las características exactas que describió — ojos, pelo, tono de piel — usando arte real en vez de emoji. Después, los fondos de los 4 mundos (366 días). Falta:
-1. Confirmar si Jesús ya activó el pago (quedó en avisar).
-2. Escribir los 7 prompts de personajes con descripciones exactas (ojos/pelo/piel) + la cláusula de originalidad.
-3. Una vez generadas las imágenes, escribir el script de integración que reemplace `ch.emoji` por `ch.img` en `CITIZENS_DEF` para los 6 personajes humanos/perro (mismo patrón que ya se usó para ToqWow).
+**Reacciones de personalidad por personaje+zona** (`REACCIONES_PERSONAJE`, `PUNTOS_REACCION`): p.ej. Michi se resiste al agua en vez de flotar (Zona 5), Copo/Vago se duermen en Zona 1, Luta hace de fortachón en Zona 8, etc. — implementadas para todas las combinaciones factibles del GDD dado el roster actual.
 
-### Pendientes conocidos (no bugs, features/tareas)
+**Factores ¡WOW! por zona** (`dispararWow`, `ZONA_WOW_COLOR`): al completar cada zona, además de la celebración genérica, se dispara una secuencia de color/partículas/melodía única por zona (10 variantes distintas — expansión radial, ciclo de color en el agua, pulsos en el roquedal, escalinata de luz + flash blanco en el mirador, etc.).
 
-- Aplicar el mismo rediseño sin-texto + sistema de zonas/progreso de Mundo 0 a Mundo 1, 2 y 3.
-- Reemplazar emojis de personajes por arte OpenArt una vez generado.
-- Quitar el fondo azul de ToqWow (regenerar con fondo transparente).
-- Conectar el progreso del juego (zonas visitadas, personajes, stickers) a persistencia real (hoy todo vive en memoria/localStorage del cliente, se pierde entre dispositivos).
+**Voz guiada multiidioma (Web Speech API, sin costo/sin servidor):**
+- Detecta `navigator.language` al cargar, pero es **overrideable** por el usuario con selector manual (banderas 🇪🇸/🇺🇸/🇧🇷 en la barra superior, persistido en `localStorage` como `toqwow_idioma`) — se agregó porque la autodetección falló para un usuario paraguayo cuyo celular estaba en inglés.
+- Diccionario `FRASES` con claves fijas (bienvenida, mapa, zonaCompleta, portalListo/NoListo, zona0…zona9) en es/en/pt.
+- `hablarTexto()` para frases compuestas dinámicamente (usado por el botón de ayuda).
+- Botón de silencio (🔊/🔇) en la barra superior.
+
+**Cartel de instrucción tipo Toca Boca:** al entrar a cada zona por primera vez (detección de scroll con debounce de 350ms), aparece una tarjeta blanca redondeada arriba con ícono + texto corto, y la voz lee lo mismo. Una sola vez por zona por sesión (`zonasExplicadasRef`).
+
+**Luciérnaga de ayuda (botón de progreso dinámico):** presente en las 10 zonas (esquina superior derecha). Al tocarla, calcula cuántas luces faltan en la zona actual y en todo el mundo, y lo dice por voz + cartel. Reemplazó a una versión anterior puramente decorativa que no hacía nada (fue el primer diseño, quedó obsoleto).
+
+### Pendiente real dentro de Mundo 1
+
+- **Ítem de fruta / combinar objetos** (Zona 2 del GDD: cargar fruta de luz, combinar dos para poción) — mecánica diseñada pero no implementada, necesita un objeto arrastrable nuevo que no existe todavía.
+- Michi no está probada en el Mercado de Luz (Zona 6) con su reacción de "manotear las luces" — la reacción está en el código (`6-michi`) pero no verificada visualmente por Jesús todavía.
+- Costuras entre zonas (unión de los 10 tiles) no verificadas visualmente en dispositivo real — quedó pendiente de que Jesús revise si se nota un salto de luz entre alguna zona y la siguiente.
+- El Mundo 2 del sitio (`/mundo/2`, diseño viejo de unicornios/hadas) es el destino actual del portal de Mundo 1 — **no** es el mismo concepto que "Pack 2" (ver abajo), y no se tocó esta sesión.
+
+### Pack 2 "Bosque Encantado" — concepto de 28 mundos (NO confundir con Mundo 2 del sitio)
+
+Diseño conceptual (no implementado salvo Mundo 1) de un futuro pack de contenido pago: 28 mundos independientes con nombre/bioma/personajes-anfitriones/3 interactivos cada uno (ver Word doc `ToqWow_Packs_Mundos_Zonas.docx`, generado esta sesión, tiene también la lista completa del Mundo 2 real del sitio para no confundir ambos). Distribución de personajes: cada uno de los 9 amigos aparece 5 veces como anfitrión en los 28 mundos.
+
+**Jerarquía correcta a futuro:** 13 Packs → cada uno ~27-28 Mundos → cada Mundo, al construirse jugable, se divide en 10 Zonas explorables (patrón de Mundo 1). Solo Mundo 1 de los 28 del Pack 2 fue construido hasta el nivel de Zonas; los otros 27 son concepto de una sola escena.
+
+### Los 13 Packs (modelo de negocio, sin cambios)
+
+| # | Pack | Mundos | Temática |
+|---|------|--------|----------|
+| 1 | Dinos del Espacio | 28 | Dinosaurios bebé en planetas alienígenas |
+| 2 | Bosque Encantado | 28 | Animales antropomórficos en bosques mágicos |
+| 3 | Ciudad de las Nubes | 28 | Personajes humanos en ciudades flotantes |
+| 4 | Océano de Cristal | 28 | Mundo submarino bioluminiscente |
+| 5 | Deportes Cósmicos | 28 | Deportes en gravedad cero y planetas |
+| 6 | Granja Mágica | 28 | Animales de granja con poderes especiales |
+| 7 | Taller de Inventos | 28 | Laboratorio de fusiones y creaciones locas |
+| 8 | Montañas Arcoíris | 28 | Paisajes de montaña con fenómenos mágicos |
+| 9 | Desierto de Caramelo | 28 | Mundo dulce con física especial |
+| 10 | Selva de Dinosaurios | 27 | Dinos adultos conviviendo con bebés |
+| 11 | Universo Bebé | 27 | Nursery cósmica, bebés de todas las especies |
+| 12 | Mundo Deportivo | 27 | Estadios y deportes con twist mágico |
+| 13 | Las Cuatro Estaciones | 27 | Mundos climáticos en tiempo real |
+
+### Mundo 0, 2, 3 — sin cambios esta sesión
+
+- **Mundo 0 (Planeta Tiqui):** sigue como estaba — único mundo previo terminado con el patrón de zonas/progreso, personajes con emoji (limitación conocida, no arte real salvo ToqWow).
+- **Mundo 2 (`/mundo/2`):** diseño viejo, 28 zonas de unicornios/hadas/animales mágicos, 42 criaturas por zona, mecánica sandbox de arrastre libre tipo Toca Boca. Ver Word doc para el listado completo de sus 28 zonas.
+- **Mundo 3 (Casa Galáctica):** sin cambios, no revisado esta sesión.
+
+### Bugs reales resueltos esta sesión (para no repetirlos)
+
+1. **Transparencia horneada como cuadriculado** (ver arriba) — método seguro documentado.
+2. **Resaltado táctil gris del navegador** confundido con "bug de transparencia": Chrome Android muestra un rectángulo gris por defecto sobre botones/imágenes tocadas si no se desactiva. Fix global: `-webkit-tap-highlight-color: transparent; outline: none;` en CSS para `button, img`, más lo mismo inline en el contenedor raíz.
+3. **`transform` de CSS animation vs. `transform` inline de React pisándose entre sí:** un elemento no puede tener a la vez una `animation` de CSS que anima `transform` Y un `transform` inline controlado por JS — el último listado gana y descarta el otro. Solución: arquitectura de contenedores anidados, cada uno controlando una sola capa de transform (posición de arrastre / animación idle / squash).
+4. **Variable usada antes de su declaración (`mundoCompleto`)** — error real de `tsc` en modo estricto, no lo detecta esbuild. Recordatorio: **siempre correr `npx tsc --noEmit` + `npx next build` reales antes de dar un push por terminado**, clonando el repo fresco (no confiar en el estado local del working directory).
+5. **`rembg` (remoción de fondo por IA) no funciona en este entorno:** el modelo se descarga de `release-assets.githubusercontent.com`, no incluido en la whitelist de red del sandbox. Alternativa que sí funciona: algoritmo propio de detección de tablero de ajedrez por tono + componentes conexos (ver punto 1).
+
+### Verificación obligatoria antes de dar un push por terminado
+
+```bash
+git clone --depth 1 https://<TOKEN>@github.com/ToqWow/ToqWow.git repo_check
+cd repo_check/apps/web && npm install --no-audit --no-fund
+npx tsc --noEmit          # debe salir vacío
+npx next build            # debe terminar en "Compiled successfully"
+cd ../../.. && rm -rf repo_check
+```
+
+### Pendientes generales (no bugs, features/tareas)
+
+- Ítem de fruta/combinación de objetos en Mundo 1 Zona 2.
+- Generar y agregar el personaje Michi al Bestiario/pruebas de zona 6 (Mercado de Luz).
+- Revisar visualmente en dispositivo real las costuras entre las 10 zonas de Mundo 1.
+- Aplicar el mismo tratamiento (10 zonas, personajes reales, voz, WOW) a Mundo 0, 2 y 3 — siguen con su diseño anterior.
+- Construir los otros 27 mundos del Pack 2 (por ahora solo concepto de una escena, sin las 10 zonas cada uno).
+- Diseñar y construir los otros 12 packs.
+- Sistema de avatar personalizable (piel/pelo/ojos/accesorios) — se prototipó una vez en un artifact de ejemplo, no está integrado al juego real.
+- `next@14.2.3` tiene una vulnerabilidad de seguridad conocida con parche disponible — no urgente pero pendiente de actualizar.
 - Todo lo de pagos (Paddle/Pagopar/IAP), backend, panel admin y agentes IA descrito en la sección de visión de abajo sigue sin implementarse — es roadmap, no estado actual.
+- Conectar el progreso del juego a persistencia real (hoy vive en memoria/localStorage del cliente, se pierde entre dispositivos).
 
 ---
 
