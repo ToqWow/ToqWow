@@ -13,92 +13,211 @@ const vib = (p: number | number[]) => { try { (navigator as any).vibrate?.(p); }
 
 // ---- Sistema de voz guiada, adaptado al idioma del dispositivo ----
 const IDIOMA_DETECTADO = typeof navigator !== 'undefined' ? (navigator.language || 'es').slice(0, 2).toLowerCase() : 'es';
-const LOCALE_VOZ: Record<string, string> = { es: 'es-419', en: 'en-US', pt: 'pt-BR', fr: 'fr-FR', id: 'id-ID', sw: 'sw-KE', hi: 'hi-IN' };
+const LOCALE_VOZ: Record<string, string> = { es: 'es-419', en: 'en-US', pt: 'pt-BR', hi: 'hi-IN', id: 'id-ID', ru: 'ru-RU', vi: 'vi-VN', zh: 'zh-CN', ja: 'ja-JP', ko: 'ko-KR' };
 const FRASES: Record<string, Record<string, string>> = {
   bienvenida: {
     es: '¡Hola! Soy Toqwow. Arrastrame por el bosque hasta las lucesitas brillantes.',
     en: "Hi! I'm Toqwow. Drag me around the forest to the glowing lights.",
     pt: 'Oi! Eu sou o Toqwow. Me arraste pela floresta até as lucinhas brilhantes.',
+    hi: 'नमस्ते! मैं टॉकवाओ हूँ। मुझे जंगल में चमकती रोशनी तक खींचो।',
+    id: 'Hai! Aku Toqwow. Seret aku ke lampu-lampu berkilau di hutan.',
+    ru: 'Привет! Я Токвау. Тяни меня по лесу к сверкающим огонькам.',
+    vi: 'Xin chào! Mình là Toqwow. Kéo mình đi khắp khu rừng đến những đốm sáng lấp lánh.',
+    zh: '你好！我是Toqwow。拖着我到森林里那些闪闪发光的小灯那里。',
+    ja: 'こんにちは！ぼくトクワオだよ。森のキラキラ光るところまで引っぱってね。',
+    ko: '안녕! 나는 토크와우야. 숲속의 반짝이는 불빛까지 나를 끌어줘.',
   },
   mapa: {
     es: 'Este es el mapa del bosque. Tocá una zona para ir ahí.',
     en: 'This is the forest map. Tap a zone to go there.',
     pt: 'Este é o mapa da floresta. Toque em uma área para ir até lá.',
+    hi: 'यह जंगल का नक्शा है। किसी जगह पर टैप करके वहाँ जाओ।',
+    id: 'Ini peta hutan. Sentuh salah satu area untuk pergi ke sana.',
+    ru: 'Это карта леса. Нажми на зону, чтобы туда перейти.',
+    vi: 'Đây là bản đồ khu rừng. Chạm vào một khu vực để đến đó.',
+    zh: '这是森林地图。点一个区域就能去那里。',
+    ja: 'これは森の地図だよ。行きたい場所をタップしてね。',
+    ko: '이건 숲 지도야. 가고 싶은 곳을 톡 눌러봐.',
   },
   zonaCompleta: {
     es: '¡Muy bien! Encontraste todas las luces de esta zona.',
     en: 'Great job! You found all the lights in this zone.',
     pt: 'Muito bem! Você encontrou todas as luzes desta área.',
+    hi: 'शाबाश! तुमने इस जगह की सारी रोशनी ढूंढ ली।',
+    id: 'Hebat! Kamu menemukan semua cahaya di area ini.',
+    ru: 'Отлично! Ты нашёл все огоньки в этой зоне.',
+    vi: 'Giỏi lắm! Bạn đã tìm thấy hết ánh sáng ở khu này.',
+    zh: '太棒了！你找到了这个区域的所有亮光。',
+    ja: 'すごい！このエリアの光を全部見つけたね。',
+    ko: '잘했어! 이 구역의 불빛을 다 찾았어.',
   },
   portalNoListo: {
     es: 'Todavía faltan luces por encontrar en el bosque.',
     en: 'There are still more lights to find in the forest.',
     pt: 'Ainda faltam luzes para encontrar na floresta.',
+    hi: 'जंगल में अभी और रोशनियाँ ढूंढनी बाकी हैं।',
+    id: 'Masih ada cahaya yang belum ditemukan di hutan.',
+    ru: 'В лесу ещё остались огоньки, которые нужно найти.',
+    vi: 'Khu rừng vẫn còn ánh sáng chưa được tìm thấy.',
+    zh: '森林里还有亮光没有找到。',
+    ja: '森にはまだ見つけていない光があるよ。',
+    ko: '숲에는 아직 찾지 못한 불빛이 있어.',
   },
   portalListo: {
     es: '¡Lo lograste! Tocá el portal para continuar la aventura.',
     en: 'You did it! Tap the portal to continue the adventure.',
     pt: 'Você conseguiu! Toque no portal para continuar a aventura.',
+    hi: 'तुमने कर दिखाया! आगे जाने के लिए द्वार को छुओ।',
+    id: 'Kamu berhasil! Sentuh portal untuk melanjutkan petualangan.',
+    ru: 'У тебя получилось! Нажми на портал, чтобы продолжить приключение.',
+    vi: 'Bạn đã làm được! Chạm vào cổng để tiếp tục cuộc phiêu lưu.',
+    zh: '你做到了！点一下传送门继续冒险。',
+    ja: 'やったね！ポータルをタップして冒険を続けよう。',
+    ko: '해냈구나! 포털을 눌러서 모험을 계속해봐.',
   },
   nuevoAmigo: {
     es: '¡Un nuevo amigo llegó al bosque!',
     en: 'A new friend arrived in the forest!',
     pt: 'Um novo amigo chegou à floresta!',
+    hi: 'जंगल में एक नया दोस्त आया!',
+    id: 'Teman baru datang ke hutan!',
+    ru: 'В лесу появился новый друг!',
+    vi: 'Một người bạn mới đã đến khu rừng!',
+    zh: '森林里来了一个新朋友！',
+    ja: '森に新しいお友だちがやってきたよ！',
+    ko: '숲에 새로운 친구가 왔어!',
   },
   presentacionIntro: {
     es: '¡Hola! Soy Toqwow. Estos son mis amigos del bosque. Elegí con quién querés jugar. Podés cambiar cuando quieras.',
     en: "Hi! I'm Toqwow. These are my forest friends. Pick who you want to play with. You can change anytime.",
     pt: 'Oi! Eu sou o Toqwow. Estes são meus amigos da floresta. Escolha com quem você quer brincar. Você pode trocar quando quiser.',
+    hi: 'नमस्ते! मैं टॉकवाओ हूँ। ये मेरे जंगल के दोस्त हैं। चुनो किसके साथ खेलना है। तुम कभी भी बदल सकते हो।',
+    id: 'Hai! Aku Toqwow. Ini teman-temanku di hutan. Pilih siapa yang mau kamu ajak main. Kamu bisa ganti kapan saja.',
+    ru: 'Привет! Я Токвау. Это мои лесные друзья. Выбери, с кем хочешь играть. Ты можешь поменять в любой момент.',
+    vi: 'Xin chào! Mình là Toqwow. Đây là những người bạn trong rừng của mình. Hãy chọn ai bạn muốn chơi cùng. Bạn có thể đổi bất cứ lúc nào.',
+    zh: '你好！我是Toqwow。这些是我森林里的朋友。选一个你想一起玩的。你随时都可以换。',
+    ja: 'こんにちは！ぼくトクワオだよ。これは森のお友だちだよ。だれと遊ぶか選んでね。いつでも変えられるよ。',
+    ko: '안녕! 나는 토크와우야. 얘들은 숲속 친구들이야. 누구랑 놀지 골라봐. 언제든지 바꿀 수 있어.',
   },
   zona0: {
     es: 'Tocá el mapa dorado para ver todo el bosque.',
     en: 'Tap the golden map to see the whole forest.',
     pt: 'Toque no mapa dourado para ver toda a floresta.',
+    hi: 'जंगल पूरा देखने के लिए सुनहरे नक्शे को छुओ।',
+    id: 'Sentuh peta emas untuk melihat seluruh hutan.',
+    ru: 'Нажми на золотую карту, чтобы увидеть весь лес.',
+    vi: 'Chạm vào bản đồ vàng để xem toàn bộ khu rừng.',
+    zh: '点一下金色的地图，看看整个森林。',
+    ja: '金色の地図をタップして森全体を見てみよう。',
+    ko: '황금 지도를 눌러서 숲 전체를 봐봐.',
   },
   zona1: {
     es: 'Arrastrá a un amigo hasta las lucesitas brillantes para juntarlas.',
     en: 'Drag a friend to the glowing lights to collect them.',
     pt: 'Arraste um amigo até as lucinhas brilhantes para coletá-las.',
+    hi: 'रोशनियाँ इकट्ठा करने के लिए किसी दोस्त को उन तक खींचो।',
+    id: 'Seret seorang teman ke lampu-lampu berkilau untuk mengumpulkannya.',
+    ru: 'Перетащи друга к сверкающим огонькам, чтобы собрать их.',
+    vi: 'Kéo một người bạn đến những đốm sáng lấp lánh để thu thập chúng.',
+    zh: '把一个朋友拖到闪闪发光的小灯那里，把它们收集起来。',
+    ja: 'お友だちをキラキラ光るところまで引っぱって集めよう。',
+    ko: '친구를 반짝이는 불빛까지 끌어서 모아봐.',
   },
   zona2: {
     es: 'Arrastrá a un amigo hasta las puertas de las casitas de hongo.',
     en: 'Drag a friend to the doors of the little mushroom houses.',
     pt: 'Arraste um amigo até as portas das casinhas de cogumelo.',
+    hi: 'किसी दोस्त को मशरूम के घरों के दरवाज़ों तक खींचो।',
+    id: 'Seret seorang teman ke pintu rumah-rumah jamur.',
+    ru: 'Перетащи друга к дверям грибных домиков.',
+    vi: 'Kéo một người bạn đến cửa những ngôi nhà nấm.',
+    zh: '把一个朋友拖到蘑菇小屋的门那里。',
+    ja: 'お友だちをきのこの家のドアまで引っぱろう。',
+    ko: '친구를 버섯집 문까지 끌어봐.',
   },
   zona3: {
     es: 'Cruzá el puente y arrastrá a un amigo cerca de las luces del camino.',
     en: 'Cross the bridge and drag a friend close to the path lights.',
     pt: 'Atravesse a ponte e arraste um amigo perto das luzes do caminho.',
+    hi: 'पुल पार करो और किसी दोस्त को रास्ते की रोशनी के पास खींचो।',
+    id: 'Seberangi jembatan dan seret teman dekat lampu di jalan.',
+    ru: 'Перейди мост и перетащи друга поближе к огонькам на тропе.',
+    vi: 'Băng qua cầu và kéo một người bạn đến gần ánh sáng trên đường.',
+    zh: '过桥，把朋友拖到小路上的灯附近。',
+    ja: '橋を渡って、お友だちを道の光の近くまで引っぱろう。',
+    ko: '다리를 건너서 친구를 길 위의 불빛 가까이 끌어봐.',
   },
   zona4: {
     es: 'Arrastrá a un amigo hasta el agua para que flote.',
     en: 'Drag a friend into the water so they float.',
     pt: 'Arraste um amigo até a água para que ele flutue.',
+    hi: 'किसी दोस्त को पानी तक खींचो ताकि वह तैरे।',
+    id: 'Seret seorang teman ke air supaya dia mengapung.',
+    ru: 'Перетащи друга в воду, чтобы он поплыл.',
+    vi: 'Kéo một người bạn xuống nước để bạn ấy nổi lên.',
+    zh: '把一个朋友拖到水里，让他漂起来。',
+    ja: 'お友だちを水の中まで引っぱって浮かせよう。',
+    ko: '친구를 물 속으로 끌어서 떠다니게 해봐.',
   },
   zona5: {
     es: 'Arrastrá a un amigo cerca de las gotitas brillantes en las hojas.',
     en: 'Drag a friend close to the sparkling dewdrops on the leaves.',
     pt: 'Arraste um amigo perto das gotinhas brilhantes nas folhas.',
+    hi: 'किसी दोस्त को पत्तों की चमकती बूंदों के पास खींचो।',
+    id: 'Seret seorang teman dekat tetesan embun yang berkilau di daun.',
+    ru: 'Перетащи друга поближе к сверкающим капелькам на листьях.',
+    vi: 'Kéo một người bạn đến gần những giọt sương lấp lánh trên lá.',
+    zh: '把一个朋友拖到叶子上闪亮的露珠附近。',
+    ja: 'お友だちを葉っぱのキラキラした水玉の近くまで引っぱろう。',
+    ko: '친구를 잎사귀의 반짝이는 이슬방울 가까이 끌어봐.',
   },
   zona6: {
     es: 'Arrastrá a un amigo hasta las nubes de luciérnagas de colores.',
     en: 'Drag a friend to the colorful firefly clouds.',
     pt: 'Arraste um amigo até as nuvens coloridas de vaga-lumes.',
+    hi: 'किसी दोस्त को रंगीन जुगनुओं के बादलों तक खींचो।',
+    id: 'Seret seorang teman ke awan kunang-kunang warna-warni.',
+    ru: 'Перетащи друга к разноцветным облакам светлячков.',
+    vi: 'Kéo một người bạn đến những đám mây đom đóm nhiều màu.',
+    zh: '把一个朋友拖到彩色的萤火虫云那里。',
+    ja: 'お友だちを色とりどりのホタルの雲まで引っぱろう。',
+    ko: '친구를 알록달록한 반딧불이 구름까지 끌어봐.',
   },
   zona7: {
     es: 'Arrastrá a un amigo cerca de las rocas brillantes para descubrir algo.',
     en: 'Drag a friend close to the glowing rocks to discover something.',
     pt: 'Arraste um amigo perto das pedras brilhantes para descobrir algo.',
+    hi: 'किसी दोस्त को चमकती चट्टानों के पास खींचो और कुछ खोजो।',
+    id: 'Seret seorang teman dekat batu yang bersinar untuk menemukan sesuatu.',
+    ru: 'Перетащи друга поближе к сияющим камням, чтобы что-то найти.',
+    vi: 'Kéo một người bạn đến gần những tảng đá phát sáng để khám phá điều gì đó.',
+    zh: '把一个朋友拖到发光的石头附近，发现点什么。',
+    ja: 'お友だちを光る岩の近くまで引っぱって何か見つけよう。',
+    ko: '친구를 빛나는 바위 가까이 끌어서 뭔가 발견해봐.',
   },
   zona8: {
     es: 'Arrastrá a un amigo cerca de la entrada brillante de la cueva.',
     en: 'Drag a friend close to the glowing cave entrance.',
     pt: 'Arraste um amigo perto da entrada brilhante da caverna.',
+    hi: 'किसी दोस्त को गुफा के चमकते द्वार के पास खींचो।',
+    id: 'Seret seorang teman dekat pintu masuk gua yang bersinar.',
+    ru: 'Перетащи друга поближе к сияющему входу в пещеру.',
+    vi: 'Kéo một người bạn đến gần cửa hang sáng lấp lánh.',
+    zh: '把一个朋友拖到山洞发光的入口附近。',
+    ja: 'お友だちを洞窟の光る入り口の近くまで引っぱろう。',
+    ko: '친구를 동굴의 빛나는 입구 가까이 끌어봐.',
   },
   zona9: {
     es: 'Juntá todas las luces del bosque para abrir el portal.',
     en: 'Collect all the forest lights to open the portal.',
     pt: 'Colete todas as luzes da floresta para abrir o portal.',
+    hi: 'द्वार खोलने के लिए जंगल की सारी रोशनियाँ इकट्ठा करो।',
+    id: 'Kumpulkan semua cahaya hutan untuk membuka portal.',
+    ru: 'Собери все огоньки леса, чтобы открыть портал.',
+    vi: 'Thu thập hết ánh sáng của khu rừng để mở cổng.',
+    zh: '收集森林里所有的亮光，打开传送门。',
+    ja: '森の光を全部集めてポータルを開けよう。',
+    ko: '숲의 불빛을 모두 모아서 포털을 열어봐.',
   },
 };
 let mutedGlobal = false;
@@ -130,10 +249,54 @@ const hablarTexto = (texto: string) => {
 };
 
 const PROGRESO_TXT = {
-  faltanZona: { es: (n: number) => `Todavía faltan ${n} luces en esta zona.`, en: (n: number) => `There are still ${n} lights left in this zone.`, pt: (n: number) => `Ainda faltam ${n} luzes nesta área.` },
-  zonaLista: { es: '¡Ya encontraste todas las luces de esta zona! Seguí explorando el bosque.', en: 'You found all the lights in this zone! Keep exploring the forest.', pt: 'Você encontrou todas as luzes desta área! Continue explorando a floresta.' },
-  faltanMundo: { es: (n: number) => `Te faltan ${n} luces en todo el bosque para abrir el portal.`, en: (n: number) => `You need ${n} more lights in the whole forest to open the portal.`, pt: (n: number) => `Faltam ${n} luzes em toda a floresta para abrir o portal.` },
-  mundoListo: { es: 'Ya juntaste todas las luces. ¡Andá al Mirador de la Luna para pasar al siguiente mundo!', en: "You've collected all the lights. Head to the Moon Overlook to move to the next world!", pt: 'Você já coletou todas as luzes. Vá ao Mirante da Lua para ir ao próximo mundo!' },
+  faltanZona: {
+    es: (n: number) => `Todavía faltan ${n} luces en esta zona.`,
+    en: (n: number) => `There are still ${n} lights left in this zone.`,
+    pt: (n: number) => `Ainda faltam ${n} luzes nesta área.`,
+    hi: (n: number) => `इस जगह में अभी भी ${n} रोशनियाँ बाकी हैं।`,
+    id: (n: number) => `Masih ada ${n} cahaya lagi di area ini.`,
+    ru: (n: number) => `В этой зоне осталось ещё ${n} огоньков.`,
+    vi: (n: number) => `Khu này vẫn còn ${n} ánh sáng nữa.`,
+    zh: (n: number) => `这个区域还差${n}个亮光。`,
+    ja: (n: number) => `このエリアにはまだ${n}個光が残っているよ。`,
+    ko: (n: number) => `이 구역에는 아직 불빛이 ${n}개 남아 있어.`,
+  },
+  zonaLista: {
+    es: '¡Ya encontraste todas las luces de esta zona! Seguí explorando el bosque.',
+    en: 'You found all the lights in this zone! Keep exploring the forest.',
+    pt: 'Você encontrou todas as luzes desta área! Continue explorando a floresta.',
+    hi: 'तुमने इस जगह की सारी रोशनी ढूंढ ली! जंगल में और घूमो।',
+    id: 'Kamu sudah menemukan semua cahaya di area ini! Terus jelajahi hutannya.',
+    ru: 'Ты нашёл все огоньки в этой зоне! Продолжай исследовать лес.',
+    vi: 'Bạn đã tìm thấy hết ánh sáng ở khu này! Hãy tiếp tục khám phá khu rừng.',
+    zh: '你已经找到这个区域的所有亮光了！继续探索森林吧。',
+    ja: 'このエリアの光を全部見つけたね！森を探検し続けよう。',
+    ko: '이 구역의 불빛을 다 찾았어! 숲을 계속 탐험해봐.',
+  },
+  faltanMundo: {
+    es: (n: number) => `Te faltan ${n} luces en todo el bosque para abrir el portal.`,
+    en: (n: number) => `You need ${n} more lights in the whole forest to open the portal.`,
+    pt: (n: number) => `Faltam ${n} luzes em toda a floresta para abrir o portal.`,
+    hi: (n: number) => `द्वार खोलने के लिए पूरे जंगल में ${n} और रोशनियाँ चाहिए।`,
+    id: (n: number) => `Kamu perlu ${n} cahaya lagi di seluruh hutan untuk membuka portal.`,
+    ru: (n: number) => `Тебе нужно найти ещё ${n} огоньков во всём лесу, чтобы открыть портал.`,
+    vi: (n: number) => `Bạn cần thêm ${n} ánh sáng trong cả khu rừng để mở cổng.`,
+    zh: (n: number) => `整个森林还差${n}个亮光才能打开传送门。`,
+    ja: (n: number) => `ポータルを開けるには、森全体であと${n}個の光が必要だよ。`,
+    ko: (n: number) => `포털을 열려면 숲 전체에서 불빛이 ${n}개 더 필요해.`,
+  },
+  mundoListo: {
+    es: 'Ya juntaste todas las luces. ¡Andá al Mirador de la Luna para pasar al siguiente mundo!',
+    en: "You've collected all the lights. Head to the Moon Overlook to move to the next world!",
+    pt: 'Você já coletou todas as luzes. Vá ao Mirante da Lua para ir ao próximo mundo!',
+    hi: 'तुमने सारी रोशनियाँ इकट्ठा कर लीं। अगली दुनिया में जाने के लिए मूनलुक पर जाओ!',
+    id: 'Kamu sudah mengumpulkan semua cahaya. Pergi ke Menara Bulan untuk lanjut ke dunia berikutnya!',
+    ru: 'Ты собрал все огоньки. Иди к Лунной смотровой площадке, чтобы перейти в следующий мир!',
+    vi: 'Bạn đã thu thập hết ánh sáng. Hãy đến Đài Ngắm Trăng để sang thế giới tiếp theo!',
+    zh: '你已经收集了所有的亮光。去月亮观景台，进入下一个世界吧！',
+    ja: '光を全部集めたね。次の世界に行くにはムーンビューポイントへ行こう！',
+    ko: '불빛을 다 모았어. 다음 세계로 가려면 문라이트 전망대로 가봐!',
+  },
 };
 
 type Hotspot = { x: number; y: number; };
@@ -178,6 +341,7 @@ export default function Mundo1() {
   const [presentacionIdx, setPresentacionIdx] = useState(0);
   const [personajeActivo, setPersonajeActivo] = useState<string>('toqwow');
   const [showMap, setShowMap] = useState(false);
+  const [showLangPicker, setShowLangPicker] = useState(false);
   const [portalNudge, setPortalNudge] = useState(false);
   const [muted, setMuted] = useState(false);
   const [idioma, setIdioma] = useState<string>(IDIOMA_DETECTADO);
@@ -198,6 +362,20 @@ export default function Mundo1() {
     try { window.localStorage.setItem('toqwow_idioma', id); } catch {}
     note(659, 0.15, 0.15);
   }, []);
+
+  // Idiomas soportados en el selector (banderas)
+  const IDIOMAS_UI = [
+    { id: 'es', flag: '🇪🇸' },
+    { id: 'en', flag: '🇺🇸' },
+    { id: 'pt', flag: '🇧🇷' },
+    { id: 'hi', flag: '🇮🇳' },
+    { id: 'id', flag: '🇮🇩' },
+    { id: 'ru', flag: '🇷🇺' },
+    { id: 'vi', flag: '🇻🇳' },
+    { id: 'zh', flag: '🇨🇳' },
+    { id: 'ja', flag: '🇯🇵' },
+    { id: 'ko', flag: '🇰🇷' },
+  ];
 
   // Roster de amigos adicionales, convocables desde la bandeja inferior
   const AMIGOS_EXTRA = [
@@ -237,7 +415,8 @@ export default function Mundo1() {
   const pedirAyuda = useCallback((zi: number) => {
     const faltanZona = ZONAS[zi].hotspots.filter((_, hi) => !collected.has(`${zi}-${hi}`)).length;
     const faltanMundo = TOTAL_HOTSPOTS - collected.size;
-    const idx = (['es', 'en', 'pt'].includes(idioma) ? idioma : 'es') as 'es' | 'en' | 'pt';
+    const IDIOMAS_SOPORTADOS = ['es', 'en', 'pt', 'hi', 'id', 'ru', 'vi', 'zh', 'ja', 'ko'] as const;
+    const idx = (IDIOMAS_SOPORTADOS.includes(idioma as any) ? idioma : 'es') as typeof IDIOMAS_SOPORTADOS[number];
     const parte1 = faltanZona > 0 ? PROGRESO_TXT.faltanZona[idx](faltanZona) : PROGRESO_TXT.zonaLista[idx];
     const parte2 = faltanMundo > 0 ? PROGRESO_TXT.faltanMundo[idx](faltanMundo) : PROGRESO_TXT.mundoListo[idx];
     const texto = `${parte1} ${parte2}`;
@@ -292,6 +471,8 @@ export default function Mundo1() {
   const rafRef = useRef<Record<string, number>>({});
   const lastRunSoundT = useRef<Record<string, number>>({});
   const runStepAlto = useRef<Record<string, boolean>>({});
+  const yaReaccionoEnDrag = useRef<Record<string, Set<number>>>({});
+  const lastHoverCheckT = useRef<Record<string, number>>({});
 
   const clearCoast = (key: string) => {
     if (rafRef.current[key]) { cancelAnimationFrame(rafRef.current[key]); delete rafRef.current[key]; }
@@ -306,45 +487,9 @@ export default function Mundo1() {
     dragState.current = { key, startClientX: e.clientX, startClientY: e.clientY, startX: current.x, startY: current.y, lastX: e.clientX, lastY: e.clientY, lastT: now, vx: 0, vy: 0 };
     setSquash(prev => ({ ...prev, [key]: 'grab' }));
     setPersonajeActivo(key.slice(0, key.lastIndexOf('-')));
+    delete yaReaccionoEnDrag.current[key];
     note(660, 0.15, 0.15); vib(10);
   }, [dragPos]);
-
-  const onDragMove = useCallback((e: React.PointerEvent) => {
-    const ds = dragState.current;
-    if (!ds) return;
-    const now = performance.now();
-    const dt = Math.max(now - ds.lastT, 1);
-    ds.vx = (e.clientX - ds.lastX) / dt;
-    ds.vy = (e.clientY - ds.lastY) / dt;
-    ds.lastX = e.clientX; ds.lastY = e.clientY; ds.lastT = now;
-    const dx = e.clientX - ds.startClientX;
-    const dy = e.clientY - ds.startClientY;
-    setDragPos(prev => ({ ...prev, [ds.key]: { x: ds.startX + dx, y: ds.startY + dy } }));
-
-    // Sonido de "carrera" mientras se mueve el personaje arrastrado (sintetizado, tipo saltito 8-bit)
-    const movimientoReal = Math.abs(ds.vx) + Math.abs(ds.vy) > 0.03;
-    if (movimientoReal) {
-      const lastRun = lastRunSoundT.current[ds.key] || 0;
-      if (now - lastRun > 150) {
-        lastRunSoundT.current[ds.key] = now;
-        const alto = !runStepAlto.current[ds.key];
-        runStepAlto.current[ds.key] = alto;
-        note(alto ? 520 : 415, 0.09, 0.05, 'square');
-      }
-    }
-
-    // Zona 1 "Puerta de Musgo": rastro de florcitas al pasar bajo el arco
-    const zoneOfKey = parseInt(ds.key.split('-').pop() || '-1', 10);
-    if (zoneOfKey === 0) {
-      const lastT = lastTrailT.current[ds.key] || 0;
-      if (now - lastT > 90) {
-        lastTrailT.current[ds.key] = now;
-        const id = ++trailId.current;
-        setTrail(prev => [...prev.slice(-14), { id, x: e.clientX, y: e.clientY }]);
-        setTimeout(() => setTrail(prev => prev.filter(t => t.id !== id)), 750);
-      }
-    }
-  }, []);
 
   const coast = useCallback((key: string, vx: number, vy: number) => {
     let velX = vx * 16, velY = vy * 16;
@@ -389,8 +534,8 @@ export default function Mundo1() {
       { x: 1789, y: 768, tipo: 'eco', emoji: '💫', sonido: () => melody([523, 659, 784], 100, 0.35, 0.18) },
     ],
   };
-  const RADIO_REACCION = 220; // px en coordenadas nativas de la zona (2752x1536)
-  const RADIO_HOTSPOT = 210; // px en coordenadas nativas — mismo criterio que los puntos tematicos
+  const RADIO_REACCION = 260; // px en coordenadas nativas de la zona (2752x1536)
+  const RADIO_HOTSPOT = 260; // px en coordenadas nativas — mismo criterio que los puntos tematicos
   const [rumbleZona, setRumbleZona] = useState<number | null>(null);
 
   // Reacciones de personalidad: que hace CADA personaje al soltarlo en CADA zona (segun el GDD)
@@ -417,7 +562,7 @@ export default function Mundo1() {
     toqwow: '🌟', tizi: '🎀', coti: '👓', zoe: '🎉', puli: '📚', tito: '💃', luta: '💪', copo: '🐾', vago: '🐕', michi: '😻',
   };
 
-  const chequearPuntosTematicos = useCallback((zi: number, e: React.PointerEvent) => {
+  const chequearPuntosTematicos = useCallback((zi: number, key: string, e: React.PointerEvent) => {
     const puntos = PUNTOS_REACCION[zi];
     if (!puntos) return;
     const target = e.currentTarget as HTMLElement;
@@ -429,9 +574,13 @@ export default function Mundo1() {
     const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
     const nativeX = relX * ZONA_WIDTH;
     const nativeY = relY * ZONA_HEIGHT;
-    for (const punto of puntos) {
+    const yaSet = yaReaccionoEnDrag.current[key] || (yaReaccionoEnDrag.current[key] = new Set());
+    for (let pi = 0; pi < puntos.length; pi++) {
+      if (yaSet.has(pi)) continue;
+      const punto = puntos[pi];
       const dist = Math.hypot(nativeX - punto.x, nativeY - punto.y);
       if (dist < RADIO_REACCION) {
+        yaSet.add(pi);
         const id = ++burstId.current;
         const px = contRect.left + (punto.x / ZONA_WIDTH) * contRect.width;
         const py = contRect.top + (punto.y / ZONA_HEIGHT) * contRect.height;
@@ -511,7 +660,7 @@ export default function Mundo1() {
       }
     }
 
-    chequearPuntosTematicos(zi, e);
+    chequearPuntosTematicos(zi, key, e);
   }, [floating, chequearPuntosTematicos, collected]);
 
   const squashTransform = (key: string) => {
@@ -526,8 +675,9 @@ export default function Mundo1() {
   // una sola vez por dispositivo. El nino puede cambiar de personaje activo en cualquier
   // zona despues (bandeja + Tizi/Coti/Toqwow siempre presentes).
   useEffect(() => {
+    const forzar = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('presentar') === '1';
     const yaPresentado = typeof window !== 'undefined' && window.localStorage.getItem('toqwow_personajes_presentados');
-    setMostrarPresentacion(!yaPresentado);
+    setMostrarPresentacion(forzar || !yaPresentado);
   }, []);
 
   useEffect(() => {
@@ -648,6 +798,55 @@ export default function Mundo1() {
     return false;
   }, [collected, activarHotspot]);
 
+  const onDragMove = useCallback((e: React.PointerEvent) => {
+    const ds = dragState.current;
+    if (!ds) return;
+    const now = performance.now();
+    const dt = Math.max(now - ds.lastT, 1);
+    ds.vx = (e.clientX - ds.lastX) / dt;
+    ds.vy = (e.clientY - ds.lastY) / dt;
+    ds.lastX = e.clientX; ds.lastY = e.clientY; ds.lastT = now;
+    const dx = e.clientX - ds.startClientX;
+    const dy = e.clientY - ds.startClientY;
+    setDragPos(prev => ({ ...prev, [ds.key]: { x: ds.startX + dx, y: ds.startY + dy } }));
+
+    // Sonido de "carrera" mientras se mueve el personaje arrastrado (sintetizado, tipo saltito 8-bit)
+    const movimientoReal = Math.abs(ds.vx) + Math.abs(ds.vy) > 0.03;
+    if (movimientoReal) {
+      const lastRun = lastRunSoundT.current[ds.key] || 0;
+      if (now - lastRun > 150) {
+        lastRunSoundT.current[ds.key] = now;
+        const alto = !runStepAlto.current[ds.key];
+        runStepAlto.current[ds.key] = alto;
+        note(alto ? 520 : 415, 0.09, 0.05, 'square');
+      }
+    }
+
+    const zoneOfKey = parseInt(ds.key.split('-').pop() || '-1', 10);
+
+    // Zona 1 "Puerta de Musgo": rastro de florcitas al pasar bajo el arco
+    if (zoneOfKey === 0) {
+      const lastT = lastTrailT.current[ds.key] || 0;
+      if (now - lastT > 90) {
+        lastTrailT.current[ds.key] = now;
+        const id = ++trailId.current;
+        setTrail(prev => [...prev.slice(-14), { id, x: e.clientX, y: e.clientY }]);
+        setTimeout(() => setTrail(prev => prev.filter(t => t.id !== id)), 750);
+      }
+    }
+
+    // Deteccion en caliente: las luces y puntos tematicos reaccionan al PASAR por encima
+    // mientras se arrastra, sin necesidad de soltar el dedo (mas facil para 2-5 anios).
+    if (zoneOfKey >= 0) {
+      const lastHover = lastHoverCheckT.current[ds.key] || 0;
+      if (now - lastHover > 90) {
+        lastHoverCheckT.current[ds.key] = now;
+        chequearHotspots(zoneOfKey, e);
+        chequearPuntosTematicos(zoneOfKey, ds.key, e);
+      }
+    }
+  }, [chequearHotspots, chequearPuntosTematicos]);
+
   const endDrag = useCallback((zi: number) => (e: React.PointerEvent) => {
     const ds = dragState.current;
     if (!ds) return;
@@ -706,20 +905,15 @@ export default function Mundo1() {
           🗺️ Mapa del Bosque ({zonasCompletas}/10)
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ display: 'flex', gap: 3, background: 'rgba(255,255,255,.08)', borderRadius: 20, padding: 3 }}>
-            {[{ id: 'es', flag: '🇪🇸' }, { id: 'en', flag: '🇺🇸' }, { id: 'pt', flag: '🇧🇷' }].map(op => (
-              <button
-                key={op.id}
-                onClick={() => elegirIdioma(op.id)}
-                aria-label={`Idioma ${op.id}`}
-                style={{
-                  width: 28, height: 28, borderRadius: '50%', border: 'none', fontSize: 14, cursor: 'pointer',
-                  background: idioma === op.id ? 'rgba(255,220,150,.9)' : 'transparent',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-              >{op.flag}</button>
-            ))}
-          </div>
+          <button
+            onClick={() => { setShowLangPicker(true); note(659, 0.15, 0.15); }}
+            aria-label="Elegir idioma"
+            style={{
+              width: 34, height: 34, borderRadius: '50%', border: '1px solid rgba(255,255,255,.25)',
+              background: 'rgba(255,255,255,.12)', fontSize: 16, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >{IDIOMAS_UI.find(o => o.id === idioma)?.flag || '🌐'}</button>
           <button
             onClick={() => setMuted(m => !m)}
             aria-label={muted ? 'Activar voz' : 'Silenciar voz'}
@@ -774,6 +968,7 @@ export default function Mundo1() {
                     <img
                       src="/assets/mundo1/char_tizi_v3.png" alt="Tizi"
                       onPointerDown={startDrag(`tizi-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                      draggable={false}
                       style={{
                         width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
                         transform: squashTransform(`tizi-${zi}`), transition: 'transform .12s ease-out',
@@ -786,6 +981,7 @@ export default function Mundo1() {
                     <img
                       src="/assets/mundo1/char_coti_v3.png" alt="Coti"
                       onPointerDown={startDrag(`coti-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                      draggable={false}
                       style={{
                         width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
                         transform: squashTransform(`coti-${zi}`), transition: 'transform .12s ease-out',
@@ -836,6 +1032,7 @@ export default function Mundo1() {
               <img
                 src="/assets/mundo1/guia_luciernaga_v4.png"
                 alt="Luciérnaga guía"
+                draggable={false}
                 style={{ width: '100%', animation: 'guideFloat 2.2s ease-in-out infinite', filter: 'drop-shadow(0 0 10px rgba(255,220,120,.6))' }}
               />
             </button>
@@ -855,6 +1052,7 @@ export default function Mundo1() {
                     src={`/assets/mundo1/${PERSONAJE_POR_ID[personajeActivo]?.src || 'char_toqwow_v3.png'}`}
                     alt={PERSONAJE_POR_ID[personajeActivo]?.nombre || 'Toqwow'}
                     onPointerDown={startDrag(`${personajeActivo}-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                    draggable={false}
                     style={{
                       width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
                       transform: squashTransform(`${personajeActivo}-${zi}`), transition: 'transform .12s ease-out',
@@ -878,6 +1076,7 @@ export default function Mundo1() {
                     <img
                       src={`/assets/mundo1/${amigo.src}`} alt={amigo.nombre}
                       onPointerDown={startDrag(key)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                      draggable={false}
                       style={{
                         width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
                         transform: squashTransform(key), transition: 'transform .12s ease-out',
@@ -1008,6 +1207,31 @@ export default function Mundo1() {
         ⟵ Deslizá para explorar el bosque ⟶
       </div>
 
+      {/* OVERLAY: Selector de idioma — 10 banderas */}
+      {showLangPicker && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 130, background: 'rgba(10,5,20,.85)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowLangPicker(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: 'rgba(30,15,50,.95)', border: '2px solid rgba(255,255,255,.2)', borderRadius: 24, padding: '22px 20px', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, maxWidth: 320 }}
+          >
+            {IDIOMAS_UI.map(op => (
+              <button
+                key={op.id}
+                onClick={() => { elegirIdioma(op.id); setShowLangPicker(false); }}
+                aria-label={`Idioma ${op.id}`}
+                style={{
+                  width: 48, height: 48, borderRadius: '50%', fontSize: 22, cursor: 'pointer',
+                  border: idioma === op.id ? '3px solid rgba(255,220,150,1)' : '2px solid rgba(255,255,255,.25)',
+                  boxShadow: idioma === op.id ? '0 0 12px rgba(255,220,150,.8)' : 'none',
+                  background: 'rgba(255,255,255,.08)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >{op.flag}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* OVERLAY: Presentacion inicial — Toqwow nombra a los 10 personajes, una sola vez. Sin texto: solo voz + sonido + animacion, igual que el resto del juego. */}
       {mostrarPresentacion && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(10,5,20,.92)', backdropFilter: 'blur(8px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '5vh 5vw' }}>
@@ -1128,7 +1352,7 @@ export default function Mundo1() {
         @keyframes portalReady { 0%,100%{ transform: scale(1); } 50%{ transform: scale(1.08); } }
         @keyframes nudgeShake { 0%,100%{ transform: translate(-50%,-50%) rotate(0); } 25%{ transform: translate(-50%,-50%) rotate(-6deg); } 75%{ transform: translate(-50%,-50%) rotate(6deg); } }
         html, body { height: 100dvh; overscroll-behavior: none; }
-        button, img { -webkit-tap-highlight-color: transparent; outline: none; -webkit-touch-callout: none; user-select: none; }
+        button, img { -webkit-tap-highlight-color: transparent; outline: none; -webkit-touch-callout: none; user-select: none; -webkit-user-drag: none; user-drag: none; -webkit-appearance: none; appearance: none; }
         button:focus, img:focus { outline: none; }
       `}</style>
     </div>
