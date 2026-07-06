@@ -216,6 +216,9 @@ export default function Mundo1() {
     { id: 'coti', src: 'char_coti_v3.png', nombre: 'Coti' },
     ...AMIGOS_EXTRA,
   ];
+  const PERSONAJE_POR_ID: Record<string, { src: string; nombre: string }> = Object.fromEntries(
+    TODOS_PERSONAJES.map(p => [p.id, { src: p.src, nombre: p.nombre }])
+  );
   const [amigosEnJuego, setAmigosEnJuego] = useState<Record<string, number>>({}); // id -> zonaIdx donde esta parado
   const [zonaVisible, setZonaVisible] = useState(0);
 
@@ -530,13 +533,21 @@ export default function Mundo1() {
   useEffect(() => {
     if (!mostrarPresentacion) return;
     if (presentacionIdx === 0) {
-      const t0 = setTimeout(() => hablarTexto(FRASES.presentacionIntro[idiomaGlobal] || FRASES.presentacionIntro.es), 500);
+      const t0 = setTimeout(() => {
+        melody([523, 659, 784], 80, 0.3, 0.18);
+        vib(15);
+        hablarTexto(FRASES.presentacionIntro[idiomaGlobal] || FRASES.presentacionIntro.es);
+      }, 500);
       const t1 = setTimeout(() => setPresentacionIdx(1), 3600);
       return () => { clearTimeout(t0); clearTimeout(t1); };
     }
     const i = presentacionIdx - 1;
     if (i >= TODOS_PERSONAJES.length) return;
-    const t = setTimeout(() => hablarTexto(TODOS_PERSONAJES[i].nombre), 150);
+    const t = setTimeout(() => {
+      note(880, 0.15, 0.15);
+      vib(10);
+      hablarTexto(TODOS_PERSONAJES[i].nombre);
+    }, 150);
     const t2 = setTimeout(() => setPresentacionIdx(p => p + 1), 1150);
     return () => { clearTimeout(t); clearTimeout(t2); };
   }, [mostrarPresentacion, presentacionIdx]);
@@ -544,6 +555,8 @@ export default function Mundo1() {
   const cerrarPresentacion = useCallback((idElegido?: string) => {
     setMostrarPresentacion(false);
     if (idElegido) setPersonajeActivo(idElegido);
+    melody([440, 554, 659, 880], 90, 0.3, 0.2);
+    vib([15, 20, 15, 30]);
     try { window.localStorage.setItem('toqwow_personajes_presentados', '1'); } catch {}
     setTimeout(() => hablar('bienvenida'), 500);
   }, []);
@@ -827,30 +840,34 @@ export default function Mundo1() {
               />
             </button>
 
-            {/* Toqwow como companero flotante, presente en todas las zonas — arrastrable, con reaccion al agua */}
-            <div style={{ position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19, transform: `translate(${dragPos[`toqwow-${zi}`]?.x || 0}px, ${dragPos[`toqwow-${zi}`]?.y || 0}px)` }}>
-              <div style={{
-                animation: dragState.current?.key === `toqwow-${zi}`
-                  ? 'none'
-                  : floating[`toqwow-${zi}`]
-                    ? 'floatWater 2.6s ease-in-out infinite'
-                    : 'charBounce 2.2s ease-in-out infinite .15s',
-              }}>
-                <img
-                  src="/assets/mundo1/char_toqwow_v3.png" alt="Toqwow"
-                  onPointerDown={startDrag(`toqwow-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
-                  style={{
-                    width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
-                    transform: squashTransform(`toqwow-${zi}`), transition: 'transform .12s ease-out',
-                    filter: floating[`toqwow-${zi}`]
-                      ? 'drop-shadow(0 10px 12px rgba(0,0,0,.45)) hue-rotate(-12deg) saturate(1.3)'
-                      : 'drop-shadow(0 10px 12px rgba(0,0,0,.45))',
-                  }} />
+            {/* Companero flotante: el personaje que el nino eligio, presente en las 10 zonas — arrastrable, con reaccion al agua.
+                Si eligio a Tizi o Coti, en la Arboleda (zi===1) no se duplica: ya estan ahi como anfitriones fijos. */}
+            {!(zi === 1 && (personajeActivo === 'tizi' || personajeActivo === 'coti')) && (
+              <div style={{ position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19, transform: `translate(${dragPos[`${personajeActivo}-${zi}`]?.x || 0}px, ${dragPos[`${personajeActivo}-${zi}`]?.y || 0}px)` }}>
+                <div style={{
+                  animation: dragState.current?.key === `${personajeActivo}-${zi}`
+                    ? 'none'
+                    : floating[`${personajeActivo}-${zi}`]
+                      ? 'floatWater 2.6s ease-in-out infinite'
+                      : 'charBounce 2.2s ease-in-out infinite .15s',
+                }}>
+                  <img
+                    src={`/assets/mundo1/${PERSONAJE_POR_ID[personajeActivo]?.src || 'char_toqwow_v3.png'}`}
+                    alt={PERSONAJE_POR_ID[personajeActivo]?.nombre || 'Toqwow'}
+                    onPointerDown={startDrag(`${personajeActivo}-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                    style={{
+                      width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
+                      transform: squashTransform(`${personajeActivo}-${zi}`), transition: 'transform .12s ease-out',
+                      filter: floating[`${personajeActivo}-${zi}`]
+                        ? 'drop-shadow(0 10px 12px rgba(0,0,0,.45)) hue-rotate(-12deg) saturate(1.3)'
+                        : 'drop-shadow(0 10px 12px rgba(0,0,0,.45))',
+                    }} />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Amigos convocados desde la bandeja, presentes en la zona donde fueron llamados */}
-            {AMIGOS_EXTRA.filter(a => amigosEnJuego[a.id] === zi).map((amigo, ai) => {
+            {AMIGOS_EXTRA.filter(a => amigosEnJuego[a.id] === zi && a.id !== personajeActivo).map((amigo, ai) => {
               const key = `${amigo.id}-${zi}`;
               return (
                 <div key={amigo.id} style={{
@@ -991,11 +1008,13 @@ export default function Mundo1() {
         ⟵ Deslizá para explorar el bosque ⟶
       </div>
 
-      {/* OVERLAY: Presentacion inicial — Toqwow nombra a los 10 personajes, una sola vez */}
+      {/* OVERLAY: Presentacion inicial — Toqwow nombra a los 10 personajes, una sola vez. Sin texto: solo voz + sonido + animacion, igual que el resto del juego. */}
       {mostrarPresentacion && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(10,5,20,.92)', backdropFilter: 'blur(8px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '5vh 5vw' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#ffe8d6', textAlign: 'center', marginBottom: 22, maxWidth: 420, lineHeight: 1.4 }}>
-            {FRASES.presentacionIntro.es}
+          <div style={{
+            width: 84, height: 84, marginBottom: 24, animation: presentacionIdx === 0 ? 'charBounce 1s ease-in-out infinite' : 'charBounce 2.2s ease-in-out infinite',
+          }}>
+            <img src="/assets/mundo1/char_toqwow_v3.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 0 16px rgba(255,220,150,.7))' }} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, maxWidth: 460 }}>
             {TODOS_PERSONAJES.map((p, i) => {
@@ -1021,7 +1040,6 @@ export default function Mundo1() {
                   }}>
                     <img src={`/assets/mundo1/${p.src}`} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   </div>
-                  <div style={{ fontSize: 11, color: 'white', fontWeight: 600 }}>{p.nombre}</div>
                 </button>
               );
             })}
@@ -1030,13 +1048,15 @@ export default function Mundo1() {
             {presentacionIdx > TODOS_PERSONAJES.length ? (
               <button
                 onClick={() => cerrarPresentacion(personajeActivo)}
-                style={{ background: 'rgba(255,220,150,.95)', border: 'none', borderRadius: 50, padding: '10px 26px', fontSize: 14, fontWeight: 700, color: '#3a2a1a', cursor: 'pointer' }}
-              >¡Empezar a jugar! 🌟</button>
+                aria-label="Empezar a jugar"
+                style={{ background: 'rgba(255,220,150,.95)', border: 'none', borderRadius: 50, width: 64, height: 64, fontSize: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'portalReady 1.8s ease-in-out infinite' }}
+              >▶️</button>
             ) : (
               <button
                 onClick={() => cerrarPresentacion()}
-                style={{ background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.3)', borderRadius: 50, padding: '9px 22px', fontSize: 13, color: 'white', cursor: 'pointer' }}
-              >Saltar</button>
+                aria-label="Saltar presentacion"
+                style={{ background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.3)', borderRadius: 50, width: 46, height: 46, fontSize: 18, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >⏭️</button>
             )}
           </div>
         </div>
