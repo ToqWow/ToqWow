@@ -153,6 +153,10 @@ const ZONAS: Zona[] = [
 const TOTAL_HOTSPOTS = ZONAS.reduce((acc, z) => acc + z.hotspots.length, 0);
 
 const ICONO_ZONA = ['🗺️', '✨', '🚪', '🌉', '💧', '🔍', '🎈', '🪨', '💎', '🌙'];
+const ZONA_WOW_COLOR: Record<number, string> = {
+  0: 'rgba(255,220,120,.55)', 1: 'rgba(180,150,255,.5)', 2: 'rgba(255,180,120,.5)',
+  3: 'rgba(150,220,255,.5)', 5: 'rgba(255,230,180,.55)', 6: 'rgba(255,150,200,.5)', 8: 'rgba(140,230,220,.5)',
+};
 
 type ActiveBurst = { id: number; x: number; y: number; zonaIdx: number; tipo?: 'sparkle' | 'splash'; emoji?: string; };
 
@@ -508,6 +512,26 @@ export default function Mundo1() {
   }, []);
 
   const [zonaCelebrando, setZonaCelebrando] = useState<number | null>(null);
+  const [wowZona, setWowZona] = useState<number | null>(null);
+
+  const dispararWow = useCallback((zi: number) => {
+    setWowZona(zi);
+    const secuencias: Record<number, () => void> = {
+      0: () => melody([659, 784, 988, 1318], 110, 0.4, 0.22),
+      1: () => { melody([392, 494, 587, 740, 880], 90, 0.35, 0.2); },
+      2: () => melody([523, 659, 784, 1046, 1318], 80, 0.3, 0.2),
+      3: () => melody([440, 554, 659, 880, 1108], 100, 0.35, 0.22),
+      4: () => melody([392, 330, 392, 494, 587], 100, 0.3, 0.2),
+      5: () => melody([784, 880, 988, 1174], 120, 0.4, 0.2),
+      6: () => melody([659, 830, 988, 1318, 1568], 90, 0.3, 0.22),
+      7: () => { note(90, 0.4, 0.25, 'sawtooth'); setTimeout(() => melody([440, 554, 659], 100, 0.3, 0.2), 300); },
+      8: () => melody([523, 659, 784, 1046], 130, 0.45, 0.22),
+      9: () => melody([659, 784, 988, 1318, 1568, 2093], 100, 0.4, 0.25),
+    };
+    (secuencias[zi] || secuencias[0])();
+    vib([20, 40, 20, 40, 90]);
+    setTimeout(() => setWowZona(null), 2600);
+  }, []);
 
   const activarHotspot = useCallback((zonaIdx: number, hIdx: number, x: number, y: number) => {
     const key = `${zonaIdx}-${hIdx}`;
@@ -520,9 +544,8 @@ export default function Mundo1() {
       if (zonaYaCompletaba && !zonaYaEstabaCompleta) {
         setTimeout(() => {
           setZonaCelebrando(zonaIdx);
-          melody([523, 659, 784, 1046], 130, 0.4, 0.22);
-          vib([20, 30, 20, 30, 60]);
           hablar('zonaCompleta');
+          dispararWow(zonaIdx);
           setTimeout(() => setZonaCelebrando(null), 1800);
         }, 200);
       }
@@ -534,7 +557,7 @@ export default function Mundo1() {
     melody([523, 659, 784]);
     vib(20);
     if (showGuide) dismissGuide();
-  }, [showGuide, dismissGuide]);
+  }, [showGuide, dismissGuide, dispararWow]);
 
   const zonaCompleta = useCallback((zi: number) => {
     return ZONAS[zi].hotspots.every((_, hi) => collected.has(`${zi}-${hi}`));
@@ -791,6 +814,29 @@ export default function Mundo1() {
               }} />
             )}
 
+            {/* Factor WOW: evento visual mas grande, unico por zona */}
+            {wowZona === zi && (
+              <div style={{ position: 'absolute', inset: 0, zIndex: 45, pointerEvents: 'none', overflow: 'hidden' }}>
+                {zi === 4 ? (
+                  <div style={{ position: 'absolute', inset: 0, animation: 'wowColorCycle 2.4s ease-in-out', mixBlendMode: 'screen' }} />
+                ) : zi === 7 ? (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(180,140,255,.25)', animation: 'wowPulseRings 2.2s ease-out' }} />
+                ) : zi === 9 ? (
+                  <>
+                    {Array.from({ length: 10 }).map((_, i) => (
+                      <div key={i} style={{
+                        position: 'absolute', left: `${45 + (i % 3) * 5}%`, bottom: 0, fontSize: 22,
+                        animation: `wowRise 1.8s ease-out ${i * 0.12}s forwards`, opacity: 0,
+                      }}>✨</div>
+                    ))}
+                    <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle, rgba(255,255,255,.5), rgba(255,255,255,0) 60%)', animation: 'wowFlashWhite 2.4s ease-out' }} />
+                  </>
+                ) : (
+                  <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(circle, ${ZONA_WOW_COLOR[zi] || 'rgba(255,220,150,.5)'}, transparent 65%)`, animation: 'wowExpand 2.2s ease-out' }} />
+                )}
+              </div>
+            )}
+
             {/* Bursts de recompensa */}
             {bursts.filter(b => b.zonaIdx === zi).map(b => (
               <div key={b.id} style={{
@@ -914,6 +960,11 @@ export default function Mundo1() {
         @keyframes trailFade { 0%{ opacity: .9; transform: translate(-50%,-50%) scale(.6); } 40%{ opacity: .8; transform: translate(-50%,-50%) scale(1); } 100%{ opacity: 0; transform: translate(-50%,-50%) scale(.8) translateY(6px); } }
         @keyframes rockRumble { 0%,100%{ transform: translateX(0); } 20%{ transform: translateX(-4px) translateY(2px); } 40%{ transform: translateX(4px) translateY(-2px); } 60%{ transform: translateX(-3px); } 80%{ transform: translateX(3px); } }
         @keyframes cartelIn { 0%{ opacity: 0; transform: translateX(-50%) translateY(-14px) scale(.9); } 100%{ opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
+        @keyframes wowExpand { 0%{ opacity: 0; transform: scale(.3); } 40%{ opacity: 1; transform: scale(1); } 100%{ opacity: 0; transform: scale(1.6); } }
+        @keyframes wowColorCycle { 0%{ background: rgba(0,220,255,.35); } 33%{ background: rgba(180,120,255,.35); } 66%{ background: rgba(255,210,90,.35); } 100%{ background: rgba(0,220,255,0); } }
+        @keyframes wowPulseRings { 0%{ opacity: 0; box-shadow: inset 0 0 0px rgba(180,140,255,.6); } 30%{ opacity: 1; } 100%{ opacity: 0; box-shadow: inset 0 0 140px rgba(180,140,255,0); } }
+        @keyframes wowRise { 0%{ opacity: 0; transform: translateY(0) scale(.6); } 20%{ opacity: 1; } 100%{ opacity: 0; transform: translateY(-320px) scale(1.3); } }
+        @keyframes wowFlashWhite { 0%{ opacity: 0; } 50%{ opacity: 1; } 100%{ opacity: 0; } }
         @keyframes charBounce { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-6%); } }
         @keyframes floatWater { 0%,100%{ transform: translateY(0) rotate(-3deg); } 50%{ transform: translateY(-4%) rotate(3deg); } }
         @keyframes mapPulse { 0%,100%{ transform: translate(-50%,-50%) scale(1); } 50%{ transform: translate(-50%,-50%) scale(1.1); } }
