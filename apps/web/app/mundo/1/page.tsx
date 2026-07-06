@@ -44,30 +44,93 @@ export default function Mundo1() {
   const [portalNudge, setPortalNudge] = useState(false);
   const burstId = useRef(0);
 
+  // ---- Sistema transversal de arrastre: fisica de inercia + squash&stretch + reacciones ----
+  type DragInfo = { key: string; startClientX: number; startClientY: number; startX: number; startY: number; lastX: number; lastY: number; lastT: number; vx: number; vy: number; };
   const [dragPos, setDragPos] = useState<Record<string, { x: number; y: number }>>({});
-  const dragState = useRef<{ key: string; startClientX: number; startClientY: number; startX: number; startY: number } | null>(null);
+  const [squash, setSquash] = useState<Record<string, 'grab' | 'drop' | null>>({});
+  const [floating, setFloating] = useState<Record<string, boolean>>({});
+  const dragState = useRef<DragInfo | null>(null);
+  const rafRef = useRef<Record<string, number>>({});
+
+  const clearCoast = (key: string) => {
+    if (rafRef.current[key]) { cancelAnimationFrame(rafRef.current[key]); delete rafRef.current[key]; }
+  };
 
   const startDrag = useCallback((key: string) => (e: React.PointerEvent) => {
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    clearCoast(key);
     const current = dragPos[key] || { x: 0, y: 0 };
-    dragState.current = { key, startClientX: e.clientX, startClientY: e.clientY, startX: current.x, startY: current.y };
-    note(660, 0.15, 0.15);
-    vib(10);
+    const now = performance.now();
+    dragState.current = { key, startClientX: e.clientX, startClientY: e.clientY, startX: current.x, startY: current.y, lastX: e.clientX, lastY: e.clientY, lastT: now, vx: 0, vy: 0 };
+    setSquash(prev => ({ ...prev, [key]: 'grab' }));
+    note(660, 0.15, 0.15); vib(10);
   }, [dragPos]);
 
   const onDragMove = useCallback((e: React.PointerEvent) => {
-    if (!dragState.current) return;
-    const { key, startClientX, startClientY, startX, startY } = dragState.current;
-    const dx = e.clientX - startClientX;
-    const dy = e.clientY - startClientY;
-    setDragPos(prev => ({ ...prev, [key]: { x: startX + dx, y: startY + dy } }));
+    const ds = dragState.current;
+    if (!ds) return;
+    const now = performance.now();
+    const dt = Math.max(now - ds.lastT, 1);
+    ds.vx = (e.clientX - ds.lastX) / dt;
+    ds.vy = (e.clientY - ds.lastY) / dt;
+    ds.lastX = e.clientX; ds.lastY = e.clientY; ds.lastT = now;
+    const dx = e.clientX - ds.startClientX;
+    const dy = e.clientY - ds.startClientY;
+    setDragPos(prev => ({ ...prev, [ds.key]: { x: ds.startX + dx, y: ds.startY + dy } }));
   }, []);
 
-  const endDrag = useCallback(() => {
-    if (dragState.current) { note(523, 0.18, 0.15); }
-    dragState.current = null;
+  const coast = useCallback((key: string, vx: number, vy: number) => {
+    let velX = vx * 16, velY = vy * 16;
+    const friction = 0.9;
+    const step = () => {
+      velX *= friction; velY *= friction;
+      setDragPos(prev => {
+        const cur = prev[key] || { x: 0, y: 0 };
+        return { ...prev, [key]: { x: cur.x + velX, y: cur.y + velY } };
+      });
+      if (Math.abs(velX) > 0.3 || Math.abs(velY) > 0.3) {
+        rafRef.current[key] = requestAnimationFrame(step);
+      } else {
+        delete rafRef.current[key];
+      }
+    };
+    rafRef.current[key] = requestAnimationFrame(step);
   }, []);
+
+  // Zonas con region de reaccion especial (por ahora: Zona 5 "Arroyo Brillante", indice 4 = agua)
+  const chequearReaccion = useCallback((zi: number, key: string, e: React.PointerEvent) => {
+    if (zi !== 4) return;
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const container = target.closest('[data-zona-container]') as HTMLElement | null;
+    if (!container) return;
+    const contRect = container.getBoundingClientRect();
+    const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
+    const enAgua = relY > 0.55 && relY < 0.9;
+    setFloating(prev => ({ ...prev, [key]: enAgua }));
+    if (enAgua) { melody([392, 330, 392], 120, 0.3, 0.15); vib([15, 20, 15]); }
+  }, []);
+
+  const endDrag = useCallback((zi: number) => (e: React.PointerEvent) => {
+    const ds = dragState.current;
+    if (!ds) return;
+    const key = ds.key;
+    note(523, 0.18, 0.15);
+    setSquash(prev => ({ ...prev, [key]: 'drop' }));
+    setTimeout(() => setSquash(prev => ({ ...prev, [key]: null })), 220);
+    chequearReaccion(zi, key, e);
+    coast(key, ds.vx, ds.vy);
+    dragState.current = null;
+  }, [coast, chequearReaccion]);
+
+  const squashTransform = (key: string) => {
+    const sq = squash[key];
+    if (sq === 'grab') return 'scale(0.88,1.12)';
+    if (sq === 'drop') return 'scale(1.15,0.85)';
+    return 'scale(1,1)';
+  };
+
 
   useEffect(() => {
     const seen = typeof window !== 'undefined' && window.localStorage.getItem('toqwow_mundo1_tutorial_visto');
@@ -150,7 +213,7 @@ export default function Mundo1() {
         }}
       >
         {ZONAS.map((zona, zi) => (
-          <div key={zona.indice} style={{ position: 'relative', flex: `0 0 auto`, height: '100%', aspectRatio: `${ZONA_WIDTH} / ${ZONA_HEIGHT}` }}>
+          <div key={zona.indice} data-zona-container style={{ position: 'relative', flex: `0 0 auto`, height: '100%', aspectRatio: `${ZONA_WIDTH} / ${ZONA_HEIGHT}` }}>
             <Image
               src={`/assets/mundo1/${zona.archivo}`}
               alt={zona.nombre}
@@ -179,24 +242,30 @@ export default function Mundo1() {
             {/* Personajes anfitriones: Toqwow + Tizi + Coti en la Arboleda (Zona 2) — arrastrables */}
             {zi === 1 && (
               <>
-                <img
-                  src="/assets/mundo1/char_tizi_v3.png" alt="Tizi"
-                  onPointerDown={startDrag(`tizi-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag} onPointerCancel={endDrag}
-                  style={{
-                    position: 'absolute', left: '38%', top: '58%', width: '9%', zIndex: 18, cursor: 'grab', touchAction: 'none',
-                    transform: `translate(${dragPos[`tizi-${zi}`]?.x || 0}px, ${dragPos[`tizi-${zi}`]?.y || 0}px)`,
-                    animation: dragState.current?.key === `tizi-${zi}` ? 'none' : 'charBounce 2.4s ease-in-out infinite',
-                    filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
-                  }} />
-                <img
-                  src="/assets/mundo1/char_coti_v3.png" alt="Coti"
-                  onPointerDown={startDrag(`coti-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag} onPointerCancel={endDrag}
-                  style={{
-                    position: 'absolute', left: '47%', top: '60%', width: '8.5%', zIndex: 17, cursor: 'grab', touchAction: 'none',
-                    transform: `translate(${dragPos[`coti-${zi}`]?.x || 0}px, ${dragPos[`coti-${zi}`]?.y || 0}px)`,
-                    animation: dragState.current?.key === `coti-${zi}` ? 'none' : 'charBounce 2.6s ease-in-out infinite .3s',
-                    filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
-                  }} />
+                <div style={{ position: 'absolute', left: '38%', top: '58%', width: '9%', zIndex: 18, transform: `translate(${dragPos[`tizi-${zi}`]?.x || 0}px, ${dragPos[`tizi-${zi}`]?.y || 0}px)` }}>
+                  <div style={{ animation: dragState.current?.key === `tizi-${zi}` ? 'none' : 'charBounce 2.4s ease-in-out infinite' }}>
+                    <img
+                      src="/assets/mundo1/char_tizi_v3.png" alt="Tizi"
+                      onPointerDown={startDrag(`tizi-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                      style={{
+                        width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
+                        transform: squashTransform(`tizi-${zi}`), transition: 'transform .12s ease-out',
+                        filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
+                      }} />
+                  </div>
+                </div>
+                <div style={{ position: 'absolute', left: '47%', top: '60%', width: '8.5%', zIndex: 17, transform: `translate(${dragPos[`coti-${zi}`]?.x || 0}px, ${dragPos[`coti-${zi}`]?.y || 0}px)` }}>
+                  <div style={{ animation: dragState.current?.key === `coti-${zi}` ? 'none' : 'charBounce 2.6s ease-in-out infinite .3s' }}>
+                    <img
+                      src="/assets/mundo1/char_coti_v3.png" alt="Coti"
+                      onPointerDown={startDrag(`coti-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                      style={{
+                        width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
+                        transform: squashTransform(`coti-${zi}`), transition: 'transform .12s ease-out',
+                        filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
+                      }} />
+                  </div>
+                </div>
               </>
             )}
 
@@ -248,16 +317,27 @@ export default function Mundo1() {
               />
             )}
 
-            {/* Toqwow como companero flotante, presente en todas las zonas — arrastrable */}
-            <img
-              src="/assets/mundo1/char_toqwow_v3.png" alt="Toqwow"
-              onPointerDown={startDrag(`toqwow-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag} onPointerCancel={endDrag}
-              style={{
-                position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19, cursor: 'grab', touchAction: 'none',
-                transform: `translate(${dragPos[`toqwow-${zi}`]?.x || 0}px, ${dragPos[`toqwow-${zi}`]?.y || 0}px)`,
-                animation: dragState.current?.key === `toqwow-${zi}` ? 'none' : 'charBounce 2.2s ease-in-out infinite .15s',
-                filter: 'drop-shadow(0 10px 12px rgba(0,0,0,.45))',
-              }} />
+            {/* Toqwow como companero flotante, presente en todas las zonas — arrastrable, con reaccion al agua */}
+            <div style={{ position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19, transform: `translate(${dragPos[`toqwow-${zi}`]?.x || 0}px, ${dragPos[`toqwow-${zi}`]?.y || 0}px)` }}>
+              <div style={{
+                animation: dragState.current?.key === `toqwow-${zi}`
+                  ? 'none'
+                  : floating[`toqwow-${zi}`]
+                    ? 'floatWater 2.6s ease-in-out infinite'
+                    : 'charBounce 2.2s ease-in-out infinite .15s',
+              }}>
+                <img
+                  src="/assets/mundo1/char_toqwow_v3.png" alt="Toqwow"
+                  onPointerDown={startDrag(`toqwow-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                  style={{
+                    width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
+                    transform: squashTransform(`toqwow-${zi}`), transition: 'transform .12s ease-out',
+                    filter: floating[`toqwow-${zi}`]
+                      ? 'drop-shadow(0 10px 12px rgba(0,0,0,.45)) hue-rotate(-12deg) saturate(1.3)'
+                      : 'drop-shadow(0 10px 12px rgba(0,0,0,.45))',
+                  }} />
+              </div>
+            </div>
 
             {/* Portal en Zona 10: gated por progreso */}
             {zi === 9 && (
@@ -344,6 +424,7 @@ export default function Mundo1() {
         @keyframes guideFloat { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-14px); } }
         @keyframes burstUp { 0%{ opacity: 1; transform: translate(-50%,-50%) scale(.5); } 100%{ opacity: 0; transform: translate(-50%,-160%) scale(1.6); } }
         @keyframes charBounce { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-6%); } }
+        @keyframes floatWater { 0%,100%{ transform: translateY(0) rotate(-3deg); } 50%{ transform: translateY(-4%) rotate(3deg); } }
         @keyframes mapPulse { 0%,100%{ transform: translate(-50%,-50%) scale(1); } 50%{ transform: translate(-50%,-50%) scale(1.1); } }
         @keyframes portalReady { 0%,100%{ transform: scale(1); } 50%{ transform: scale(1.08); } }
         @keyframes nudgeShake { 0%,100%{ transform: translate(-50%,-50%) rotate(0); } 25%{ transform: translate(-50%,-50%) rotate(-6deg); } 75%{ transform: translate(-50%,-50%) rotate(6deg); } }
