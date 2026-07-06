@@ -334,7 +334,7 @@ export default function Mundo1() {
     }
 
     // Celebracion especial en el Mirador (Zona 10) si el mundo ya esta completo
-    if (zi === 9 && mundoCompleto) {
+    if (zi === 9 && collected.size === TOTAL_HOTSPOTS) {
       const emoji = CELEBRACION_PERSONAJE[charId];
       if (emoji) {
         const target = e.currentTarget as HTMLElement;
@@ -349,7 +349,7 @@ export default function Mundo1() {
     }
 
     chequearPuntosTematicos(zi, e);
-  }, [floating, chequearPuntosTematicos, mundoCompleto]);
+  }, [floating, chequearPuntosTematicos, collected]);
 
   const endDrag = useCallback((zi: number) => (e: React.PointerEvent) => {
     const ds = dragState.current;
