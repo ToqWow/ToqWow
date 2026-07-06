@@ -477,6 +477,7 @@ export default function Mundo1() {
   const [squash, setSquash] = useState<Record<string, 'grab' | 'drop' | null>>({});
   const [floating, setFloating] = useState<Record<string, boolean>>({});
   const dragState = useRef<DragInfo | null>(null);
+  const mapHoverStartT = useRef<number | null>(null);
   const rafRef = useRef<Record<string, number>>({});
   const lastRunSoundT = useRef<Record<string, number>>({});
   const runStepAlto = useRef<Record<string, boolean>>({});
@@ -497,6 +498,7 @@ export default function Mundo1() {
     setSquash(prev => ({ ...prev, [key]: 'grab' }));
     setPersonajeActivo(key.slice(0, key.lastIndexOf('-')));
     delete yaReaccionoEnDrag.current[key];
+    mapHoverStartT.current = null;
     note(660, 0.15, 0.15); vib(10);
   }, [dragPos]);
 
@@ -880,10 +882,20 @@ export default function Mundo1() {
     const nativeX = relX * ZONA_WIDTH;
     const nativeY = relY * ZONA_HEIGHT;
     const dist = Math.hypot(nativeX - 0.22 * ZONA_WIDTH, nativeY - 0.66 * ZONA_HEIGHT);
-    if (dist < 260) {
-      abrirMapaConSonido();
-      // El arrastre sigue activo a proposito: el mismo gesto puede continuar hasta
-      // soltar el personaje sobre una zona del mapa (ver chequearThumbnailMapa).
+    const RADIO_MAPA = 200; // un poco mas ajustado al circulo visual
+    if (dist < RADIO_MAPA) {
+      const ahora = performance.now();
+      if (mapHoverStartT.current === null) {
+        mapHoverStartT.current = ahora; // recien entra: todavia no abre, evita toques al pasar de largo
+        return;
+      }
+      if (ahora - mapHoverStartT.current > 400) {
+        abrirMapaConSonido();
+        // El arrastre sigue activo a proposito: el mismo gesto puede continuar hasta
+        // soltar el personaje sobre una zona del mapa (ver chequearThumbnailMapa).
+      }
+    } else {
+      mapHoverStartT.current = null;
     }
   }, [abrirMapaConSonido]);
 
