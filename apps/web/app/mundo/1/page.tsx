@@ -153,11 +153,11 @@ export default function Mundo1() {
             {/* Personajes anfitriones: Toqwow + Tizi + Coti en la Arboleda (Zona 2) */}
             {zi === 1 && (
               <>
-                <img src="/assets/mundo1/char_tizi.png" alt="Tizi" style={{
+                <img src="/assets/mundo1/char_tizi_v2.png" alt="Tizi" style={{
                   position: 'absolute', left: '38%', top: '58%', width: '9%', zIndex: 18,
                   animation: 'charBounce 2.4s ease-in-out infinite', filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
                 }} />
-                <img src="/assets/mundo1/char_coti.png" alt="Coti" style={{
+                <img src="/assets/mundo1/char_coti_v2.png" alt="Coti" style={{
                   position: 'absolute', left: '47%', top: '60%', width: '8.5%', zIndex: 17,
                   animation: 'charBounce 2.6s ease-in-out infinite .3s', filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
                 }} />
@@ -185,7 +185,7 @@ export default function Mundo1() {
                   }}
                 >
                   <img
-                    src="/assets/mundo1/hotspot_icon.png"
+                    src="/assets/mundo1/hotspot_icon_v2.png"
                     alt=""
                     style={{
                       width: '100%', height: '100%', display: done ? 'none' : 'block',
@@ -200,7 +200,7 @@ export default function Mundo1() {
             {/* Guia luciernaga: solo en la primera zona con hotspots (Zona 2, indice 1), primera visita */}
             {zi === 1 && showGuide && (
               <img
-                src="/assets/mundo1/guia_luciernaga.png"
+                src="/assets/mundo1/guia_luciernaga_v2.png"
                 alt="Luciérnaga guía"
                 style={{
                   position: 'absolute',
@@ -213,7 +213,7 @@ export default function Mundo1() {
             )}
 
             {/* Toqwow como companero flotante, presente en todas las zonas */}
-            <img src="/assets/mundo1/char_toqwow.png" alt="Toqwow" style={{
+            <img src="/assets/mundo1/char_toqwow_v2.png" alt="Toqwow" style={{
               position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19,
               animation: 'charBounce 2.2s ease-in-out infinite .15s', filter: 'drop-shadow(0 10px 12px rgba(0,0,0,.45))',
             }} />
