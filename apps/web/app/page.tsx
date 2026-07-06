@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { detectarIdiomaInicial, guardarIdioma, IDIOMAS_UI, IdiomaSoportado } from '@/lib/idioma';
 
 const COLS = ['#B8A9FF','#00D4C8','#FFD700','#FFB3D1','#A8EDEA','#87CEEB'];
 
@@ -22,10 +23,25 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [hovered, setHovered] = useState<number|null>(null);
   const [tqScale, setTqScale] = useState(1);
+  const [idioma, setIdioma] = useState<IdiomaSoportado>('es');
+  const [showLangPicker, setShowLangPicker] = useState(false);
   const router = useRouter();
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+    // Se detecta automaticamente por idioma del dispositivo + zona horaria (sin pedir
+    // permiso de ubicacion) y se guarda para que ya este listo al entrar a jugar.
+    const detectado = detectarIdiomaInicial();
+    setIdioma(detectado);
+    guardarIdioma(detectado);
+  }, []);
   if (!mounted) return null;
+
+  const elegirIdioma = (id: IdiomaSoportado) => {
+    setIdioma(id);
+    guardarIdioma(id);
+    setShowLangPicker(false);
+  };
 
   return (
     <div style={{
@@ -35,6 +51,45 @@ export default function Home() {
       overflow:'hidden', position:'relative', fontFamily:'system-ui,sans-serif',
       paddingBottom:48,
     }}>
+
+      {/* Selector de idioma — detectado automaticamente, cambiable */}
+      <button
+        onClick={() => setShowLangPicker(true)}
+        aria-label="Elegir idioma"
+        style={{
+          position: 'fixed', top: 14, right: 14, zIndex: 50,
+          width: 40, height: 40, borderRadius: '50%', border: '1px solid rgba(255,255,255,.25)',
+          background: 'rgba(255,255,255,.1)', fontSize: 19, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)',
+        }}
+      >{IDIOMAS_UI.find(o => o.id === idioma)?.flag || '🌐'}</button>
+
+      {showLangPicker && (
+        <div
+          onClick={() => setShowLangPicker(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(10,5,20,.85)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: 'rgba(30,15,50,.95)', border: '2px solid rgba(255,255,255,.2)', borderRadius: 24, padding: '22px 20px', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, maxWidth: 320 }}
+          >
+            {IDIOMAS_UI.map(op => (
+              <button
+                key={op.id}
+                onClick={() => elegirIdioma(op.id)}
+                aria-label={`Idioma ${op.id}`}
+                style={{
+                  width: 48, height: 48, borderRadius: '50%', fontSize: 22, cursor: 'pointer',
+                  border: idioma === op.id ? '3px solid rgba(255,220,150,1)' : '2px solid rgba(255,255,255,.25)',
+                  boxShadow: idioma === op.id ? '0 0 12px rgba(255,220,150,.8)' : 'none',
+                  background: 'rgba(255,255,255,.08)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >{op.flag}</button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Estrellitas fijas */}
       {Array.from({length:70}).map((_,i) => (

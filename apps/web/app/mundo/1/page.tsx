@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { detectarIdiomaInicial, guardarIdioma, IDIOMAS_UI } from '@/lib/idioma';
 
 let AC: AudioContext | null = null;
 const ac = (): AudioContext => { if (!AC) AC = new ((window as any).AudioContext || (window as any).webkitAudioContext)(); return AC!; };
@@ -12,7 +13,7 @@ const melody = (fs: number[], gap = 100, d = 0.35, v = 0.18) => fs.forEach((f, i
 const vib = (p: number | number[]) => { try { (navigator as any).vibrate?.(p); } catch {} };
 
 // ---- Sistema de voz guiada, adaptado al idioma del dispositivo ----
-const IDIOMA_DETECTADO = typeof navigator !== 'undefined' ? (navigator.language || 'es').slice(0, 2).toLowerCase() : 'es';
+const IDIOMA_DETECTADO: string = typeof window !== 'undefined' ? detectarIdiomaInicial() : 'es';
 const LOCALE_VOZ: Record<string, string> = { es: 'es-419', en: 'en-US', pt: 'pt-BR', hi: 'hi-IN', id: 'id-ID', ru: 'ru-RU', vi: 'vi-VN', zh: 'zh-CN', ja: 'ja-JP', ko: 'ko-KR' };
 const FRASES: Record<string, Record<string, string>> = {
   bienvenida: {
@@ -362,32 +363,11 @@ export default function Mundo1() {
   useEffect(() => { mutedGlobal = muted; }, [muted]);
   useEffect(() => { idiomaGlobal = idioma; }, [idioma]);
 
-  useEffect(() => {
-    try {
-      const guardado = window.localStorage.getItem('toqwow_idioma');
-      if (guardado) setIdioma(guardado);
-    } catch {}
-  }, []);
-
   const elegirIdioma = useCallback((id: string) => {
     setIdioma(id);
-    try { window.localStorage.setItem('toqwow_idioma', id); } catch {}
+    guardarIdioma(id as any);
     note(659, 0.15, 0.15);
   }, []);
-
-  // Idiomas soportados en el selector (banderas)
-  const IDIOMAS_UI = [
-    { id: 'es', flag: '🇪🇸' },
-    { id: 'en', flag: '🇺🇸' },
-    { id: 'pt', flag: '🇧🇷' },
-    { id: 'hi', flag: '🇮🇳' },
-    { id: 'id', flag: '🇮🇩' },
-    { id: 'ru', flag: '🇷🇺' },
-    { id: 'vi', flag: '🇻🇳' },
-    { id: 'zh', flag: '🇨🇳' },
-    { id: 'ja', flag: '🇯🇵' },
-    { id: 'ko', flag: '🇰🇷' },
-  ];
 
   // Roster de amigos adicionales, convocables desde la bandeja inferior
   const AMIGOS_EXTRA = [
@@ -422,6 +402,7 @@ export default function Mundo1() {
   const zonasExplicadasRef = useRef<Set<number>>(new Set());
   const [cartelZona, setCartelZona] = useState<number | null>(null);
   const [cartelAyuda, setCartelAyuda] = useState<string | null>(null);
+  const [companionPulseZona, setCompanionPulseZona] = useState<number | null>(null);
   const cartelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pedirAyuda = useCallback((zi: number) => {
@@ -836,7 +817,14 @@ export default function Mundo1() {
     const nativeX = relX * ZONA_WIDTH;
     const nativeY = relY * ZONA_HEIGHT;
     const dist = Math.hypot(nativeX - 0.22 * ZONA_WIDTH, nativeY - 0.66 * ZONA_HEIGHT);
-    if (dist < 260) abrirMapaConSonido();
+    if (dist < 260) {
+      abrirMapaConSonido();
+      // Se corta el gesto de arrastre limpiamente: el mapa toma el control de la pantalla.
+      if (dragState.current) {
+        setSquash(prev => ({ ...prev, [dragState.current!.key]: null }));
+        dragState.current = null;
+      }
+    }
   }, [abrirMapaConSonido]);
 
   const onDragMove = useCallback((e: React.PointerEvent) => {
@@ -916,6 +904,13 @@ export default function Mundo1() {
     if (!el) return;
     const target = el.children[zi] as HTMLElement;
     target?.scrollIntoView({ behavior: 'smooth', inline: 'start' });
+    // El personaje elegido "viaja con vos": se resalta apenas llegan a la zona
+    setTimeout(() => {
+      note(880, 0.15, 0.15);
+      vib(15);
+      setCompanionPulseZona(zi);
+      setTimeout(() => setCompanionPulseZona(null), 1700);
+    }, 550);
   }, []);
 
   const intentarPortal = useCallback(() => {
@@ -1078,11 +1073,14 @@ export default function Mundo1() {
               <div style={{ position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19, transform: `translate(${dragPos[`${personajeActivo}-${zi}`]?.x || 0}px, ${dragPos[`${personajeActivo}-${zi}`]?.y || 0}px)` }}>
                 <div style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  filter: companionPulseZona === zi ? 'drop-shadow(0 0 18px rgba(255,220,150,.95))' : 'none',
                   animation: dragState.current?.key === `${personajeActivo}-${zi}`
                     ? 'none'
-                    : floating[`${personajeActivo}-${zi}`]
-                      ? 'floatWater 2.6s ease-in-out infinite'
-                      : 'charBounce 2.2s ease-in-out infinite .15s',
+                    : companionPulseZona === zi
+                      ? 'portalReady .5s ease-in-out 3'
+                      : floating[`${personajeActivo}-${zi}`]
+                        ? 'floatWater 2.6s ease-in-out infinite'
+                        : 'charBounce 2.2s ease-in-out infinite .15s',
                 }}>
                   <img
                     src={`/assets/mundo1/${PERSONAJE_POR_ID[personajeActivo]?.src || 'char_toqwow_v3.png'}`}
@@ -1098,8 +1096,9 @@ export default function Mundo1() {
                     }} />
                   <div style={{
                     fontSize: '1.4vh', fontWeight: 700, color: 'white', textShadow: '0 1px 4px rgba(0,0,0,.8)',
-                    background: 'rgba(20,10,40,.6)', borderRadius: 8, padding: '1px 6px', marginTop: 2,
-                    whiteSpace: 'nowrap', pointerEvents: 'none',
+                    background: companionPulseZona === zi ? 'rgba(255,220,150,.9)' : 'rgba(20,10,40,.6)',
+                    borderRadius: 8, padding: '1px 6px', marginTop: 2,
+                    whiteSpace: 'nowrap', pointerEvents: 'none', transition: 'background .3s',
                   }}>{PERSONAJE_POR_ID[personajeActivo]?.nombre || 'Toqwow'}</div>
                 </div>
               </div>
