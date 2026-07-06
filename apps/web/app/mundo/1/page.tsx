@@ -881,8 +881,8 @@ export default function Mundo1() {
     const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
     const nativeX = relX * ZONA_WIDTH;
     const nativeY = relY * ZONA_HEIGHT;
-    const dist = Math.hypot(nativeX - 0.22 * ZONA_WIDTH, nativeY - 0.66 * ZONA_HEIGHT);
-    const RADIO_MAPA = 200; // un poco mas ajustado al circulo visual
+    const dist = Math.hypot(nativeX - 0.13 * ZONA_WIDTH, nativeY - 0.16 * ZONA_HEIGHT);
+    const RADIO_MAPA = 140; // ajustado al circulo mas chico, ya no se cruza al pasar hacia la Zona 2
     if (dist < RADIO_MAPA) {
       const ahora = performance.now();
       if (mapHoverStartT.current === null) {
@@ -1088,16 +1088,17 @@ export default function Mundo1() {
               style={{ objectFit: 'cover', objectPosition: 'center' }}
             />
 
-            {/* Tronco-mapa en la entrada (Zona 1) — decorativo: se abre al pasar el personaje encima */}
+            {/* Tronco-mapa en la entrada (Zona 1) — decorativo: se abre al pasar el personaje encima.
+                Ubicado arriba a la izquierda para no interponerse en el camino natural hacia la Zona 2. */}
             {zi === 0 && (
               <div
                 aria-hidden="true"
                 style={{
-                  position: 'absolute', left: '22%', top: '66%', transform: 'translate(-50%,-50%)',
-                  width: '17%', aspectRatio: '1/1', borderRadius: '50%', border: '5px solid rgba(255,215,120,.9)',
+                  position: 'absolute', left: '13%', top: '16%', transform: 'translate(-50%,-50%)',
+                  width: '11%', aspectRatio: '1/1', borderRadius: '50%', border: '5px solid rgba(255,215,120,.9)',
                   background: 'radial-gradient(circle, rgba(255,215,120,.45), rgba(255,215,120,.08))',
                   boxShadow: '0 0 30px rgba(255,215,120,.6)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6vh',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '4vh',
                   pointerEvents: 'none', zIndex: 22, animation: 'mapPulse 2s ease-in-out infinite',
                 }}
               >🗺️</div>
