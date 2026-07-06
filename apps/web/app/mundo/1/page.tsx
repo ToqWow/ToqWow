@@ -141,10 +141,11 @@ export default function Mundo1() {
                 onClick={abrirMapaConSonido}
                 aria-label="Abrir mapa del bosque"
                 style={{
-                  position: 'absolute', left: '22%', top: '68%', transform: 'translate(-50%,-50%)',
-                  width: '9%', aspectRatio: '1/1', borderRadius: '50%', border: '3px solid rgba(255,215,120,.8)',
-                  background: 'radial-gradient(circle, rgba(255,215,120,.35), rgba(255,215,120,.05))',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.2vh',
+                  position: 'absolute', left: '22%', top: '66%', transform: 'translate(-50%,-50%)',
+                  width: '17%', aspectRatio: '1/1', borderRadius: '50%', border: '5px solid rgba(255,215,120,.9)',
+                  background: 'radial-gradient(circle, rgba(255,215,120,.45), rgba(255,215,120,.08))',
+                  boxShadow: '0 0 30px rgba(255,215,120,.6)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6vh',
                   cursor: 'pointer', zIndex: 22, animation: 'mapPulse 2s ease-in-out infinite',
                 }}
               >🗺️</button>
@@ -153,11 +154,11 @@ export default function Mundo1() {
             {/* Personajes anfitriones: Toqwow + Tizi + Coti en la Arboleda (Zona 2) */}
             {zi === 1 && (
               <>
-                <img src="/assets/mundo1/char_tizi_v2.png" alt="Tizi" style={{
+                <img src="/assets/mundo1/char_tizi_v3.png" alt="Tizi" style={{
                   position: 'absolute', left: '38%', top: '58%', width: '9%', zIndex: 18,
                   animation: 'charBounce 2.4s ease-in-out infinite', filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
                 }} />
-                <img src="/assets/mundo1/char_coti_v2.png" alt="Coti" style={{
+                <img src="/assets/mundo1/char_coti_v3.png" alt="Coti" style={{
                   position: 'absolute', left: '47%', top: '60%', width: '8.5%', zIndex: 17,
                   animation: 'charBounce 2.6s ease-in-out infinite .3s', filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
                 }} />
@@ -185,7 +186,7 @@ export default function Mundo1() {
                   }}
                 >
                   <img
-                    src="/assets/mundo1/hotspot_icon_v2.png"
+                    src="/assets/mundo1/hotspot_icon_v3.png"
                     alt=""
                     style={{
                       width: '100%', height: '100%', display: done ? 'none' : 'block',
@@ -200,7 +201,7 @@ export default function Mundo1() {
             {/* Guia luciernaga: solo en la primera zona con hotspots (Zona 2, indice 1), primera visita */}
             {zi === 1 && showGuide && (
               <img
-                src="/assets/mundo1/guia_luciernaga_v2.png"
+                src="/assets/mundo1/guia_luciernaga_v3.png"
                 alt="Luciérnaga guía"
                 style={{
                   position: 'absolute',
@@ -213,7 +214,7 @@ export default function Mundo1() {
             )}
 
             {/* Toqwow como companero flotante, presente en todas las zonas */}
-            <img src="/assets/mundo1/char_toqwow_v2.png" alt="Toqwow" style={{
+            <img src="/assets/mundo1/char_toqwow_v3.png" alt="Toqwow" style={{
               position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19,
               animation: 'charBounce 2.2s ease-in-out infinite .15s', filter: 'drop-shadow(0 10px 12px rgba(0,0,0,.45))',
             }} />
@@ -282,9 +283,9 @@ export default function Mundo1() {
                   >
                     <img src={`/assets/mundo1/map/${zona.thumb}`} alt={zona.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     {completa && (
-                      <div style={{ position: 'absolute', top: 2, right: 2, fontSize: 16, filter: 'drop-shadow(0 1px 2px black)' }}>⭐</div>
+                      <div style={{ position: 'absolute', top: 2, right: 2, fontSize: 22, filter: 'drop-shadow(0 1px 3px black)' }}>⭐</div>
                     )}
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, fontSize: 9, textAlign: 'center', color: 'white', background: 'rgba(0,0,0,.45)', padding: '2px 0' }}>{zi + 1}</div>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, fontSize: 12, fontWeight: 700, textAlign: 'center', color: 'white', background: 'rgba(0,0,0,.55)', padding: '3px 0' }}>{zi + 1}</div>
                   </button>
                 );
               })}
