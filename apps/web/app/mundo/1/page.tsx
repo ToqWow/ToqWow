@@ -112,6 +112,24 @@ const hablar = (clave: string) => {
     window.speechSynthesis.speak(u);
   } catch {}
 };
+const hablarTexto = (texto: string) => {
+  if (mutedGlobal) return;
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = LOCALE_VOZ[idiomaGlobal] || 'es-419';
+    u.rate = 0.95; u.pitch = 1.2; u.volume = 1;
+    window.speechSynthesis.speak(u);
+  } catch {}
+};
+
+const PROGRESO_TXT = {
+  faltanZona: { es: (n: number) => `Todavía faltan ${n} luces en esta zona.`, en: (n: number) => `There are still ${n} lights left in this zone.`, pt: (n: number) => `Ainda faltam ${n} luzes nesta área.` },
+  zonaLista: { es: '¡Ya encontraste todas las luces de esta zona! Seguí explorando el bosque.', en: 'You found all the lights in this zone! Keep exploring the forest.', pt: 'Você encontrou todas as luzes desta área! Continue explorando a floresta.' },
+  faltanMundo: { es: (n: number) => `Te faltan ${n} luces en todo el bosque para abrir el portal.`, en: (n: number) => `You need ${n} more lights in the whole forest to open the portal.`, pt: (n: number) => `Faltam ${n} luzes em toda a floresta para abrir o portal.` },
+  mundoListo: { es: 'Ya juntaste todas las luces. ¡Andá al Mirador de la Luna para pasar al siguiente mundo!', en: "You've collected all the lights. Head to the Moon Overlook to move to the next world!", pt: 'Você já coletou todas as luzes. Vá ao Mirante da Lua para ir ao próximo mundo!' },
+};
 
 type Hotspot = { x: number; y: number; };
 type Zona = { indice: number; nombre: string; archivo: string; thumb: string; hotspots: Hotspot[]; };
@@ -191,7 +209,23 @@ export default function Mundo1() {
 
   const zonasExplicadasRef = useRef<Set<number>>(new Set());
   const [cartelZona, setCartelZona] = useState<number | null>(null);
+  const [cartelAyuda, setCartelAyuda] = useState<string | null>(null);
   const cartelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pedirAyuda = useCallback((zi: number) => {
+    const faltanZona = ZONAS[zi].hotspots.filter((_, hi) => !collected.has(`${zi}-${hi}`)).length;
+    const faltanMundo = TOTAL_HOTSPOTS - collected.size;
+    const idx = (['es', 'en', 'pt'].includes(idioma) ? idioma : 'es') as 'es' | 'en' | 'pt';
+    const parte1 = faltanZona > 0 ? PROGRESO_TXT.faltanZona[idx](faltanZona) : PROGRESO_TXT.zonaLista[idx];
+    const parte2 = faltanMundo > 0 ? PROGRESO_TXT.faltanMundo[idx](faltanMundo) : PROGRESO_TXT.mundoListo[idx];
+    const texto = `${parte1} ${parte2}`;
+    setCartelZona(null);
+    setCartelAyuda(texto);
+    hablarTexto(texto);
+    note(659, 0.15, 0.15);
+    if (cartelTimeoutRef.current) clearTimeout(cartelTimeoutRef.current);
+    cartelTimeoutRef.current = setTimeout(() => setCartelAyuda(null), 5500);
+  }, [collected, idioma]);
 
   const mostrarCartelZona = useCallback((zi: number) => {
     if (zonasExplicadasRef.current.has(zi)) return;
@@ -670,20 +704,21 @@ export default function Mundo1() {
               );
             })}
 
-            {/* Guia luciernaga: solo en la primera zona con hotspots (Zona 2, indice 1), primera visita */}
-            {zi === 1 && showGuide && (
+            {/* Luciernaga de ayuda: presente en todas las zonas, toca para saber que falta */}
+            <button
+              onClick={() => pedirAyuda(zi)}
+              aria-label="Pedir ayuda a la luciérnaga guía"
+              style={{
+                position: 'absolute', right: '5%', top: '10%', width: '9%', aspectRatio: '1/1',
+                background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', zIndex: 25,
+              }}
+            >
               <img
                 src="/assets/mundo1/guia_luciernaga_v4.png"
                 alt="Luciérnaga guía"
-                style={{
-                  position: 'absolute',
-                  left: `${(zona.hotspots[0].x / ZONA_WIDTH) * 100 - 6}%`,
-                  top: `${(zona.hotspots[0].y / ZONA_HEIGHT) * 100 - 10}%`,
-                  width: '7%', zIndex: 25, pointerEvents: 'none',
-                  animation: 'guideFloat 2.2s ease-in-out infinite',
-                }}
+                style={{ width: '100%', animation: 'guideFloat 2.2s ease-in-out infinite', filter: 'drop-shadow(0 0 10px rgba(255,220,120,.6))' }}
               />
-            )}
+            </button>
 
             {/* Toqwow como companero flotante, presente en todas las zonas — arrastrable, con reaccion al agua */}
             <div style={{ position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19, transform: `translate(${dragPos[`toqwow-${zi}`]?.x || 0}px, ${dragPos[`toqwow-${zi}`]?.y || 0}px)` }}>
@@ -776,8 +811,8 @@ export default function Mundo1() {
         }}>🌼</div>
       ))}
 
-      {/* Cartel de instruccion tipo Toca Boca, aparece al entrar a cada zona */}
-      {cartelZona !== null && (
+      {/* Cartel de instruccion tipo Toca Boca, aparece al entrar a cada zona o al pedir ayuda */}
+      {(cartelZona !== null || cartelAyuda !== null) && (
         <div style={{
           position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)', zIndex: 90,
           maxWidth: '86%', background: 'rgba(255,255,255,.97)', borderRadius: 20,
@@ -787,9 +822,9 @@ export default function Mundo1() {
           <div style={{
             width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(160deg,#ffe9b0,#ffd27a)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0,
-          }}>{ICONO_ZONA[cartelZona] || '✨'}</div>
+          }}>{cartelAyuda !== null ? '🐝' : (ICONO_ZONA[cartelZona!] || '✨')}</div>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#3a2a1a', lineHeight: 1.35 }}>
-            {FRASES[`zona${cartelZona}`]?.[idioma] || FRASES[`zona${cartelZona}`]?.es}
+            {cartelAyuda !== null ? cartelAyuda : (FRASES[`zona${cartelZona}`]?.[idioma] || FRASES[`zona${cartelZona}`]?.es)}
           </div>
         </div>
       )}
