@@ -833,6 +833,42 @@ export default function Mundo1() {
   }, []);
 
   // Zona 0 "Puerta de Musgo": el tronco-mapa esta en left:22%, top:66% del contenedor de zona
+  const irAZona = useCallback((zi: number) => {
+    setShowMap(false);
+    const el = scrollRef.current;
+    if (!el) return;
+    const target = el.children[zi] as HTMLElement;
+    target?.scrollIntoView({ behavior: 'smooth', inline: 'start' });
+    // El personaje elegido "viaja con vos": llega limpio (sin offsets viejos) y se resalta
+    const key = `${personajeActivo}-${zi}`;
+    setDragPos(prev => ({ ...prev, [key]: { x: 0, y: 0 } }));
+    setTimeout(() => {
+      note(880, 0.15, 0.15);
+      vib(15);
+      setCompanionPulseZona(zi);
+      setTimeout(() => setCompanionPulseZona(null), 1700);
+    }, 550);
+  }, [personajeActivo]);
+
+  // Con el mapa abierto, si el personaje (que se sigue arrastrando, sin haber soltado
+  // el dedo) pasa sobre una miniatura de zona, viaja ahi mismo -- gesto continuo,
+  // sin necesitar un segundo toque separado.
+  const chequearThumbnailMapa = useCallback((e: React.PointerEvent) => {
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const thumbEl = el?.closest('[data-zona-thumb]') as HTMLElement | null;
+    if (!thumbEl) return;
+    const zi = parseInt(thumbEl.getAttribute('data-zona-thumb') || '-1', 10);
+    if (zi < 0) return;
+    if (dragState.current) {
+      const key = dragState.current.key;
+      try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch {}
+      dragState.current = null;
+      autoScrollDir.current = 0;
+      setSquash(prev => ({ ...prev, [key]: null }));
+    }
+    irAZona(zi);
+  }, [irAZona]);
+
   const chequearTroncoMapa = useCallback((e: React.PointerEvent) => {
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
@@ -846,14 +882,8 @@ export default function Mundo1() {
     const dist = Math.hypot(nativeX - 0.22 * ZONA_WIDTH, nativeY - 0.66 * ZONA_HEIGHT);
     if (dist < 260) {
       abrirMapaConSonido();
-      // Se corta el gesto de arrastre limpiamente: el mapa toma el control de la pantalla.
-      if (dragState.current) {
-        const keyAlSoltar = dragState.current.key;
-        dragState.current = null;
-        autoScrollDir.current = 0;
-        setSquash(prev => ({ ...prev, [keyAlSoltar]: null }));
-        setDragPos(prev => ({ ...prev, [keyAlSoltar]: { x: 0, y: 0 } }));
-      }
+      // El arrastre sigue activo a proposito: el mismo gesto puede continuar hasta
+      // soltar el personaje sobre una zona del mapa (ver chequearThumbnailMapa).
     }
   }, [abrirMapaConSonido]);
 
@@ -889,6 +919,13 @@ export default function Mundo1() {
   const onDragMove = useCallback((e: React.PointerEvent) => {
     const ds = dragState.current;
     if (!ds) return;
+
+    // Con el mapa abierto, el arrastre se usa solo para elegir una zona (gesto continuo).
+    if (showMap) {
+      chequearThumbnailMapa(e);
+      return;
+    }
+
     const now = performance.now();
     const dt = Math.max(now - ds.lastT, 1);
     ds.vx = (e.clientX - ds.lastX) / dt;
@@ -946,12 +983,20 @@ export default function Mundo1() {
     if (dir !== 0 && autoScrollRAF.current === null) {
       autoScrollRAF.current = requestAnimationFrame(runAutoScroll);
     }
-  }, [chequearHotspots, chequearPuntosTematicos, chequearTroncoMapa, showMap, runAutoScroll]);
+  }, [chequearHotspots, chequearPuntosTematicos, chequearTroncoMapa, chequearThumbnailMapa, showMap, runAutoScroll]);
 
   const endDrag = useCallback((zi: number) => (e: React.PointerEvent) => {
     const ds = dragState.current;
     if (!ds) return;
     const key = ds.key;
+    if (showMap) {
+      // Solto sobre el fondo del mapa (no una miniatura): solo se cierra el gesto,
+      // sin disparar hotspots/reacciones de la zona de origen.
+      setSquash(prev => ({ ...prev, [key]: null }));
+      dragState.current = null;
+      autoScrollDir.current = 0;
+      return;
+    }
     note(523, 0.18, 0.15);
     setSquash(prev => ({ ...prev, [key]: 'drop' }));
     setTimeout(() => setSquash(prev => ({ ...prev, [key]: null })), 220);
@@ -960,7 +1005,7 @@ export default function Mundo1() {
     coast(key, ds.vx, ds.vy);
     dragState.current = null;
     autoScrollDir.current = 0;
-  }, [coast, chequearReaccion, chequearHotspots]);
+  }, [coast, chequearReaccion, chequearHotspots, showMap]);
 
   const zonaCompleta = useCallback((zi: number) => {
     return ZONAS[zi].hotspots.every((_, hi) => collected.has(`${zi}-${hi}`));
@@ -969,23 +1014,6 @@ export default function Mundo1() {
   const progreso = collected.size;
   const mundoCompleto = progreso === TOTAL_HOTSPOTS;
   const zonasCompletas = ZONAS.filter((_, zi) => zonaCompleta(zi)).length;
-
-  const irAZona = useCallback((zi: number) => {
-    setShowMap(false);
-    const el = scrollRef.current;
-    if (!el) return;
-    const target = el.children[zi] as HTMLElement;
-    target?.scrollIntoView({ behavior: 'smooth', inline: 'start' });
-    // El personaje elegido "viaja con vos": llega limpio (sin offsets viejos) y se resalta
-    const key = `${personajeActivo}-${zi}`;
-    setDragPos(prev => ({ ...prev, [key]: { x: 0, y: 0 } }));
-    setTimeout(() => {
-      note(880, 0.15, 0.15);
-      vib(15);
-      setCompanionPulseZona(zi);
-      setTimeout(() => setCompanionPulseZona(null), 1700);
-    }, 550);
-  }, [personajeActivo]);
 
   const intentarPortal = useCallback(() => {
     if (mundoCompleto) {
@@ -1423,6 +1451,7 @@ export default function Mundo1() {
                 return (
                   <button
                     key={zi}
+                    data-zona-thumb={zi}
                     onClick={() => irAZona(zi)}
                     style={{
                       position: 'relative', border: '3px solid #8a6a3a', borderRadius: 14, padding: 0,
