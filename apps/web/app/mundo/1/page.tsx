@@ -230,6 +230,30 @@ export default function Mundo1() {
   const RADIO_REACCION = 220; // px en coordenadas nativas de la zona (2752x1536)
   const [rumbleZona, setRumbleZona] = useState<number | null>(null);
 
+  // Reacciones de personalidad: que hace CADA personaje al soltarlo en CADA zona (segun el GDD)
+  const REACCIONES_PERSONAJE: Record<string, { emoji: string; sonido: () => void }> = {
+    '0-copo': { emoji: '💤', sonido: () => { note(220, 0.3, 0.15); setTimeout(() => note(196, 0.3, 0.12), 250); } },
+    '0-vago': { emoji: '💤', sonido: () => { note(196, 0.3, 0.15); setTimeout(() => note(174, 0.3, 0.12), 250); } },
+    '0-michi': { emoji: '😻', sonido: () => melody([784, 880, 784], 90, 0.25, 0.15) },
+    '1-puli': { emoji: '📝', sonido: () => melody([988, 1046, 1108], 60, 0.15, 0.12) },
+    '1-tito': { emoji: '😋', sonido: () => { note(392, 0.15, 0.18); setTimeout(() => note(330, 0.2, 0.15), 130); } },
+    '2-zoe': { emoji: '🎉', sonido: () => melody([659, 784, 988], 80, 0.3, 0.2) },
+    '2-luta': { emoji: '🤷', sonido: () => note(330, 0.15, 0.12) },
+    '3-vago': { emoji: '🌉', sonido: () => { note(220, 0.15, 0.18, 'triangle'); setTimeout(() => note(196, 0.15, 0.15, 'triangle'), 100); } },
+    '5-puli': { emoji: '🔍', sonido: () => melody([880, 1046], 90, 0.2, 0.16) },
+    '5-copo': { emoji: '🤧', sonido: () => { note(440, 0.08, 0.15); setTimeout(() => note(220, 0.15, 0.15), 90); } },
+    '6-michi': { emoji: '🐾', sonido: () => melody([523, 587, 523], 90, 0.2, 0.14) },
+    '6-tito': { emoji: '💫', sonido: () => note(660, 0.4, 0.15) },
+    '7-luta': { emoji: '💪', sonido: () => melody([392, 523, 659], 100, 0.3, 0.2) },
+    '7-vago': { emoji: '😵', sonido: () => { note(180, 0.3, 0.2, 'sawtooth'); setTimeout(() => note(150, 0.3, 0.15), 200); } },
+    '8-michi': { emoji: '❓', sonido: () => note(587, 0.15, 0.12) },
+    '8-vago': { emoji: '❓', sonido: () => note(523, 0.15, 0.12) },
+    '8-zoe': { emoji: '🦸', sonido: () => melody([523, 659, 784, 1046], 90, 0.35, 0.2) },
+  };
+  const CELEBRACION_PERSONAJE: Record<string, string> = {
+    toqwow: '🌟', tizi: '🎀', coti: '👓', zoe: '🎉', puli: '📚', tito: '💃', luta: '💪', copo: '🐾', vago: '🐕', michi: '😻',
+  };
+
   const chequearPuntosTematicos = useCallback((zi: number, e: React.PointerEvent) => {
     const puntos = PUNTOS_REACCION[zi];
     if (!puntos) return;
@@ -261,8 +285,8 @@ export default function Mundo1() {
     }
   }, []);
 
-  // Zonas con region de reaccion especial (Zona 5 "Arroyo Brillante", indice 4 = agua)
   const chequearReaccion = useCallback((zi: number, key: string, e: React.PointerEvent) => {
+    const charId = key.slice(0, key.lastIndexOf('-'));
     if (zi === 4) {
       const target = e.currentTarget as HTMLElement;
       const rect = target.getBoundingClientRect();
@@ -271,6 +295,17 @@ export default function Mundo1() {
       const contRect = container.getBoundingClientRect();
       const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
       const enAgua = relY > 0.42;
+
+      // Michi se resiste al agua: reaccion propia en vez de flotar
+      if (charId === 'michi' && enAgua) {
+        const id = ++burstId.current;
+        setBursts(prev => [...prev, { id, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, zonaIdx: zi, tipo: 'sparkle', emoji: '💨' }]);
+        setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
+        note(311, 0.2, 0.2, 'sawtooth');
+        vib([10, 10, 10]);
+        return;
+      }
+
       const yaFlotando = !!floating[key];
       setFloating(prev => ({ ...prev, [key]: enAgua }));
       if (enAgua && !yaFlotando) {
@@ -284,8 +319,37 @@ export default function Mundo1() {
       }
       return;
     }
+
+    // Reaccion de personalidad especifica (personaje + zona), si esta definida
+    const reaccionPersonal = REACCIONES_PERSONAJE[`${zi}-${charId}`];
+    if (reaccionPersonal) {
+      const target = e.currentTarget as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      const id = ++burstId.current;
+      setBursts(prev => [...prev, { id, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, zonaIdx: zi, tipo: 'sparkle', emoji: reaccionPersonal.emoji }]);
+      setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
+      reaccionPersonal.sonido();
+      vib(15);
+      return;
+    }
+
+    // Celebracion especial en el Mirador (Zona 10) si el mundo ya esta completo
+    if (zi === 9 && mundoCompleto) {
+      const emoji = CELEBRACION_PERSONAJE[charId];
+      if (emoji) {
+        const target = e.currentTarget as HTMLElement;
+        const rect = target.getBoundingClientRect();
+        const id = ++burstId.current;
+        setBursts(prev => [...prev, { id, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, zonaIdx: zi, tipo: 'sparkle', emoji }]);
+        setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
+        melody([659, 784, 988, 1318], 80, 0.3, 0.2);
+        vib([15, 15, 15, 40]);
+        return;
+      }
+    }
+
     chequearPuntosTematicos(zi, e);
-  }, [floating, chequearPuntosTematicos]);
+  }, [floating, chequearPuntosTematicos, mundoCompleto]);
 
   const endDrag = useCallback((zi: number) => (e: React.PointerEvent) => {
     const ds = dragState.current;
