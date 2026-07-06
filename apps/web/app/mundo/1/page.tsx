@@ -47,16 +47,17 @@ const FRASES: Record<string, Record<string, string>> = {
   },
 };
 let mutedGlobal = false;
+let idiomaGlobal = IDIOMA_DETECTADO;
 const hablar = (clave: string) => {
   if (mutedGlobal) return;
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   const dict = FRASES[clave];
   if (!dict) return;
-  const texto = dict[IDIOMA_DETECTADO] || dict['es'];
+  const texto = dict[idiomaGlobal] || dict['es'];
   try {
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(texto);
-    u.lang = LOCALE_VOZ[IDIOMA_DETECTADO] || 'es-419';
+    u.lang = LOCALE_VOZ[idiomaGlobal] || 'es-419';
     u.rate = 0.95; u.pitch = 1.2; u.volume = 1;
     window.speechSynthesis.speak(u);
   } catch {}
@@ -97,9 +98,24 @@ export default function Mundo1() {
   const [showMap, setShowMap] = useState(false);
   const [portalNudge, setPortalNudge] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [idioma, setIdioma] = useState<string>(IDIOMA_DETECTADO);
   const burstId = useRef(0);
 
   useEffect(() => { mutedGlobal = muted; }, [muted]);
+  useEffect(() => { idiomaGlobal = idioma; }, [idioma]);
+
+  useEffect(() => {
+    try {
+      const guardado = window.localStorage.getItem('toqwow_idioma');
+      if (guardado) setIdioma(guardado);
+    } catch {}
+  }, []);
+
+  const elegirIdioma = useCallback((id: string) => {
+    setIdioma(id);
+    try { window.localStorage.setItem('toqwow_idioma', id); } catch {}
+    note(659, 0.15, 0.15);
+  }, []);
 
   // Roster de amigos adicionales, convocables desde la bandeja inferior
   const AMIGOS_EXTRA = [
@@ -108,8 +124,8 @@ export default function Mundo1() {
     { id: 'tito', src: 'char_tito.png', nombre: 'Tito' },
     { id: 'luta', src: 'char_luta.png', nombre: 'Luta' },
     { id: 'copo', src: 'char_copo.png', nombre: 'Copo de Nieve' },
-    { id: 'vago', src: 'char_vago.png', nombre: 'Vago' },
-    { id: 'michi', src: 'char_michi.png', nombre: 'Michi' },
+    { id: 'vago', src: 'char_vago_v2.png', nombre: 'Vago' },
+    { id: 'michi', src: 'char_michi_v2.png', nombre: 'Michi' },
   ];
   const [amigosEnJuego, setAmigosEnJuego] = useState<Record<string, number>>({}); // id -> zonaIdx donde esta parado
   const [zonaVisible, setZonaVisible] = useState(0);
@@ -455,13 +471,27 @@ export default function Mundo1() {
         <button onClick={abrirMapaConSonido} style={{ background: 'rgba(255, 200, 90, .18)', border: '1px solid rgba(255,200,90,.5)', borderRadius: 50, padding: '7px 18px', fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
           🗺️ Mapa del Bosque ({zonasCompletas}/10)
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 3, background: 'rgba(255,255,255,.08)', borderRadius: 20, padding: 3 }}>
+            {[{ id: 'es', flag: '🇪🇸' }, { id: 'en', flag: '🇺🇸' }, { id: 'pt', flag: '🇧🇷' }].map(op => (
+              <button
+                key={op.id}
+                onClick={() => elegirIdioma(op.id)}
+                aria-label={`Idioma ${op.id}`}
+                style={{
+                  width: 28, height: 28, borderRadius: '50%', border: 'none', fontSize: 14, cursor: 'pointer',
+                  background: idioma === op.id ? 'rgba(255,220,150,.9)' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >{op.flag}</button>
+            ))}
+          </div>
           <button
             onClick={() => setMuted(m => !m)}
             aria-label={muted ? 'Activar voz' : 'Silenciar voz'}
             style={{ background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.25)', borderRadius: '50%', width: 34, height: 34, fontSize: 15, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >{muted ? '🔇' : '🔊'}</button>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.6)', minWidth: 50, textAlign: 'right' }}>✨{progreso}/{TOTAL_HOTSPOTS}</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.6)', minWidth: 40, textAlign: 'right' }}>✨{progreso}/{TOTAL_HOTSPOTS}</div>
         </div>
       </div>
 
