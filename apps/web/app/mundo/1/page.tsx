@@ -11,6 +11,57 @@ const note = (f: number, d = 0.3, v = 0.2, t: OscillatorType = 'sine') => {
 const melody = (fs: number[], gap = 100, d = 0.35, v = 0.18) => fs.forEach((f, i) => setTimeout(() => note(f, d, v), i * gap));
 const vib = (p: number | number[]) => { try { (navigator as any).vibrate?.(p); } catch {} };
 
+// ---- Sistema de voz guiada, adaptado al idioma del dispositivo ----
+const IDIOMA_DETECTADO = typeof navigator !== 'undefined' ? (navigator.language || 'es').slice(0, 2).toLowerCase() : 'es';
+const LOCALE_VOZ: Record<string, string> = { es: 'es-419', en: 'en-US', pt: 'pt-BR', fr: 'fr-FR', id: 'id-ID', sw: 'sw-KE', hi: 'hi-IN' };
+const FRASES: Record<string, Record<string, string>> = {
+  bienvenida: {
+    es: '¡Hola! Soy Toqwow. Arrastrame por el bosque y tocá las lucesitas brillantes.',
+    en: "Hi! I'm Toqwow. Drag me around the forest and tap the glowing lights.",
+    pt: 'Oi! Eu sou o Toqwow. Me arraste pela floresta e toque as lucinhas brilhantes.',
+  },
+  mapa: {
+    es: 'Este es el mapa del bosque. Tocá una zona para ir ahí.',
+    en: 'This is the forest map. Tap a zone to go there.',
+    pt: 'Este é o mapa da floresta. Toque em uma área para ir até lá.',
+  },
+  zonaCompleta: {
+    es: '¡Muy bien! Encontraste todas las luces de esta zona.',
+    en: 'Great job! You found all the lights in this zone.',
+    pt: 'Muito bem! Você encontrou todas as luzes desta área.',
+  },
+  portalNoListo: {
+    es: 'Todavía faltan luces por encontrar en el bosque.',
+    en: 'There are still more lights to find in the forest.',
+    pt: 'Ainda faltam luzes para encontrar na floresta.',
+  },
+  portalListo: {
+    es: '¡Lo lograste! Tocá el portal para continuar la aventura.',
+    en: 'You did it! Tap the portal to continue the adventure.',
+    pt: 'Você conseguiu! Toque no portal para continuar a aventura.',
+  },
+  nuevoAmigo: {
+    es: '¡Un nuevo amigo llegó al bosque!',
+    en: 'A new friend arrived in the forest!',
+    pt: 'Um novo amigo chegou à floresta!',
+  },
+};
+let mutedGlobal = false;
+const hablar = (clave: string) => {
+  if (mutedGlobal) return;
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const dict = FRASES[clave];
+  if (!dict) return;
+  const texto = dict[IDIOMA_DETECTADO] || dict['es'];
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = LOCALE_VOZ[IDIOMA_DETECTADO] || 'es-419';
+    u.rate = 0.95; u.pitch = 1.2; u.volume = 1;
+    window.speechSynthesis.speak(u);
+  } catch {}
+};
+
 type Hotspot = { x: number; y: number; };
 type Zona = { indice: number; nombre: string; archivo: string; thumb: string; hotspots: Hotspot[]; };
 
@@ -45,7 +96,45 @@ export default function Mundo1() {
   const [showGuide, setShowGuide] = useState(true);
   const [showMap, setShowMap] = useState(false);
   const [portalNudge, setPortalNudge] = useState(false);
+  const [muted, setMuted] = useState(false);
   const burstId = useRef(0);
+
+  useEffect(() => { mutedGlobal = muted; }, [muted]);
+
+  // Roster de amigos adicionales, convocables desde la bandeja inferior
+  const AMIGOS_EXTRA = [
+    { id: 'zoe', src: 'char_zoe.png', nombre: 'Zoe' },
+    { id: 'puli', src: 'char_puli.png', nombre: 'Puli' },
+    { id: 'tito', src: 'char_tito.png', nombre: 'Tito' },
+    { id: 'luta', src: 'char_luta.png', nombre: 'Luta' },
+    { id: 'copo', src: 'char_copo.png', nombre: 'Copo de Nieve' },
+    { id: 'vago', src: 'char_vago.png', nombre: 'Vago' },
+    { id: 'michi', src: 'char_michi.png', nombre: 'Michi' },
+  ];
+  const [amigosEnJuego, setAmigosEnJuego] = useState<Record<string, number>>({}); // id -> zonaIdx donde esta parado
+  const [zonaVisible, setZonaVisible] = useState(0);
+
+  const detectarZonaVisible = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return 0;
+    const zw = el.scrollWidth / ZONAS.length;
+    return Math.round(el.scrollLeft / zw);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => setZonaVisible(detectarZonaVisible());
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [detectarZonaVisible]);
+
+  const convocarAmigo = useCallback((id: string) => {
+    setAmigosEnJuego(prev => ({ ...prev, [id]: zonaVisible }));
+    hablar('nuevoAmigo');
+    melody([440, 554, 659], 90, 0.25, 0.16);
+    vib(15);
+  }, [zonaVisible]);
 
   // ---- Sistema transversal de arrastre: fisica de inercia + squash&stretch + reacciones ----
   type DragInfo = { key: string; startClientX: number; startClientY: number; startX: number; startY: number; lastX: number; lastY: number; lastT: number; vx: number; vy: number; };
@@ -221,6 +310,7 @@ export default function Mundo1() {
   useEffect(() => {
     const seen = typeof window !== 'undefined' && window.localStorage.getItem('toqwow_mundo1_tutorial_visto');
     if (seen) setShowGuide(false);
+    else setTimeout(() => hablar('bienvenida'), 900);
   }, []);
 
   const dismissGuide = useCallback(() => {
@@ -243,6 +333,7 @@ export default function Mundo1() {
           setZonaCelebrando(zonaIdx);
           melody([523, 659, 784, 1046], 130, 0.4, 0.22);
           vib([20, 30, 20, 30, 60]);
+          hablar('zonaCompleta');
           setTimeout(() => setZonaCelebrando(null), 1800);
         }, 200);
       }
@@ -268,6 +359,7 @@ export default function Mundo1() {
     setShowMap(true);
     melody([392, 523, 659], 90, 0.3, 0.15);
     vib(15);
+    hablar('mapa');
   }, []);
 
   const irAZona = useCallback((zi: number) => {
@@ -281,10 +373,12 @@ export default function Mundo1() {
   const intentarPortal = useCallback(() => {
     if (mundoCompleto) {
       note(880, 0.4, 0.25); setTimeout(() => note(1046, 0.5, 0.25), 200);
+      hablar('portalListo');
       setTimeout(() => router.push('/mundo/2'), 500);
     } else {
       setPortalNudge(true);
       note(220, 0.3, 0.2, 'triangle');
+      hablar('portalNoListo');
       setTimeout(() => setPortalNudge(false), 700);
     }
   }, [mundoCompleto, router]);
@@ -297,7 +391,14 @@ export default function Mundo1() {
         <button onClick={abrirMapaConSonido} style={{ background: 'rgba(255, 200, 90, .18)', border: '1px solid rgba(255,200,90,.5)', borderRadius: 50, padding: '7px 18px', fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
           🗺️ Mapa del Bosque ({zonasCompletas}/10)
         </button>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,.6)', minWidth: 50, textAlign: 'right' }}>✨{progreso}/{TOTAL_HOTSPOTS}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={() => setMuted(m => !m)}
+            aria-label={muted ? 'Activar voz' : 'Silenciar voz'}
+            style={{ background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.25)', borderRadius: '50%', width: 34, height: 34, fontSize: 15, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >{muted ? '🔇' : '🔊'}</button>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.6)', minWidth: 50, textAlign: 'right' }}>✨{progreso}/{TOTAL_HOTSPOTS}</div>
+        </div>
       </div>
 
       {/* SCROLL HORIZONTAL DE ZONAS */}
@@ -437,6 +538,28 @@ export default function Mundo1() {
               </div>
             </div>
 
+            {/* Amigos convocados desde la bandeja, presentes en la zona donde fueron llamados */}
+            {AMIGOS_EXTRA.filter(a => amigosEnJuego[a.id] === zi).map((amigo, ai) => {
+              const key = `${amigo.id}-${zi}`;
+              return (
+                <div key={amigo.id} style={{
+                  position: 'absolute', left: `${20 + ai * 10}%`, bottom: '8%', width: '10%', zIndex: 16,
+                  transform: `translate(${dragPos[key]?.x || 0}px, ${dragPos[key]?.y || 0}px)`,
+                }}>
+                  <div style={{ animation: dragState.current?.key === key ? 'none' : 'charBounce 2.3s ease-in-out infinite' }}>
+                    <img
+                      src={`/assets/mundo1/${amigo.src}`} alt={amigo.nombre}
+                      onPointerDown={startDrag(key)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                      style={{
+                        width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
+                        transform: squashTransform(key), transition: 'transform .12s ease-out',
+                        filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
+                      }} />
+                  </div>
+                </div>
+              );
+            })}
+
             {/* Portal en Zona 10: gated por progreso */}
             {zi === 9 && (
               <button
@@ -483,6 +606,31 @@ export default function Mundo1() {
           fontSize: 18, pointerEvents: 'none', zIndex: 65, animation: 'trailFade .75s ease-out forwards',
         }}>🌼</div>
       ))}
+
+      {/* Bandeja de amigos convocables */}
+      <div style={{
+        position: 'absolute', bottom: 44, left: 0, right: 0, zIndex: 60,
+        display: 'flex', gap: 10, overflowX: 'auto', padding: '6px 14px',
+      }}>
+        {AMIGOS_EXTRA.map(amigo => {
+          const enJuego = amigosEnJuego[amigo.id] !== undefined;
+          return (
+            <button
+              key={amigo.id}
+              onClick={() => convocarAmigo(amigo.id)}
+              aria-label={`Convocar a ${amigo.nombre}`}
+              style={{
+                flexShrink: 0, width: 46, height: 46, borderRadius: '50%',
+                border: enJuego ? '2px solid rgba(255,220,150,.9)' : '2px solid rgba(255,255,255,.35)',
+                background: 'rgba(20,10,40,.55)', backdropFilter: 'blur(6px)',
+                padding: 4, cursor: 'pointer', opacity: enJuego ? 1 : 0.75,
+              }}
+            >
+              <img src={`/assets/mundo1/${amigo.src}`} alt={amigo.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            </button>
+          );
+        })}
+      </div>
 
       {/* Indicador de scroll sutil */}
       <div style={{ position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 60, fontSize: 11, color: 'rgba(255,255,255,.45)', background: 'rgba(20,10,40,.4)', padding: '4px 12px', borderRadius: 20 }}>
