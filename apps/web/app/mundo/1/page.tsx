@@ -852,6 +852,7 @@ export default function Mundo1() {
         dragState.current = null;
         autoScrollDir.current = 0;
         setSquash(prev => ({ ...prev, [keyAlSoltar]: null }));
+        setDragPos(prev => ({ ...prev, [keyAlSoltar]: { x: 0, y: 0 } }));
       }
     }
   }, [abrirMapaConSonido]);
@@ -975,14 +976,16 @@ export default function Mundo1() {
     if (!el) return;
     const target = el.children[zi] as HTMLElement;
     target?.scrollIntoView({ behavior: 'smooth', inline: 'start' });
-    // El personaje elegido "viaja con vos": se resalta apenas llegan a la zona
+    // El personaje elegido "viaja con vos": llega limpio (sin offsets viejos) y se resalta
+    const key = `${personajeActivo}-${zi}`;
+    setDragPos(prev => ({ ...prev, [key]: { x: 0, y: 0 } }));
     setTimeout(() => {
       note(880, 0.15, 0.15);
       vib(15);
       setCompanionPulseZona(zi);
       setTimeout(() => setCompanionPulseZona(null), 1700);
     }, 550);
-  }, []);
+  }, [personajeActivo]);
 
   const intentarPortal = useCallback(() => {
     if (mundoCompleto) {
