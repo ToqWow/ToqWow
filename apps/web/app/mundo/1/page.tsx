@@ -125,100 +125,100 @@ const FRASES: Record<string, Record<string, string>> = {
     ko: '황금 지도를 눌러서 숲 전체를 봐봐.',
   },
   zona1: {
-    es: 'Arrastrá a un amigo hasta las lucesitas brillantes para juntarlas.',
-    en: 'Drag a friend to the glowing lights to collect them.',
-    pt: 'Arraste um amigo até as lucinhas brilhantes para coletá-las.',
-    hi: 'रोशनियाँ इकट्ठा करने के लिए किसी दोस्त को उन तक खींचो।',
-    id: 'Seret seorang teman ke lampu-lampu berkilau untuk mengumpulkannya.',
-    ru: 'Перетащи друга к сверкающим огонькам, чтобы собрать их.',
-    vi: 'Kéo một người bạn đến những đốm sáng lấp lánh để thu thập chúng.',
-    zh: '把一个朋友拖到闪闪发光的小灯那里，把它们收集起来。',
-    ja: 'お友だちをキラキラ光るところまで引っぱって集めよう。',
-    ko: '친구를 반짝이는 불빛까지 끌어서 모아봐.',
+    es: 'Arrastrá a tu personaje hasta las lucesitas brillantes para juntarlas.',
+    en: 'Drag your character to the glowing lights to collect them.',
+    pt: 'Arraste seu personagem até as lucinhas brilhantes para coletá-las.',
+    hi: 'रोशनियाँ इकट्ठा करने के लिए अपने किरदार को उन तक खींचो।',
+    id: 'Seret karaktermu ke lampu-lampu berkilau untuk mengumpulkannya.',
+    ru: 'Перетащи своего персонажа к сверкающим огонькам, чтобы собрать их.',
+    vi: 'Kéo nhân vật của bạn đến những đốm sáng lấp lánh để thu thập chúng.',
+    zh: '把你的角色拖到闪闪发光的小灯那里，把它们收集起来。',
+    ja: 'キャラクターをキラキラ光るところまで引っぱって集めよう。',
+    ko: '네 캐릭터를 반짝이는 불빛까지 끌어서 모아봐.',
   },
   zona2: {
-    es: 'Arrastrá a un amigo hasta las puertas de las casitas de hongo.',
-    en: 'Drag a friend to the doors of the little mushroom houses.',
-    pt: 'Arraste um amigo até as portas das casinhas de cogumelo.',
-    hi: 'किसी दोस्त को मशरूम के घरों के दरवाज़ों तक खींचो।',
-    id: 'Seret seorang teman ke pintu rumah-rumah jamur.',
-    ru: 'Перетащи друга к дверям грибных домиков.',
-    vi: 'Kéo một người bạn đến cửa những ngôi nhà nấm.',
-    zh: '把一个朋友拖到蘑菇小屋的门那里。',
-    ja: 'お友だちをきのこの家のドアまで引っぱろう。',
-    ko: '친구를 버섯집 문까지 끌어봐.',
+    es: 'Arrastrá a tu personaje hasta las puertas de las casitas de hongo.',
+    en: 'Drag your character to the doors of the little mushroom houses.',
+    pt: 'Arraste seu personagem até as portas das casinhas de cogumelo.',
+    hi: 'अपने किरदार को मशरूम के घरों के दरवाज़ों तक खींचो।',
+    id: 'Seret karaktermu ke pintu rumah-rumah jamur.',
+    ru: 'Перетащи своего персонажа к дверям грибных домиков.',
+    vi: 'Kéo nhân vật của bạn đến cửa những ngôi nhà nấm.',
+    zh: '把你的角色拖到蘑菇小屋的门那里。',
+    ja: 'キャラクターをきのこの家のドアまで引っぱろう。',
+    ko: '네 캐릭터를 버섯집 문까지 끌어봐.',
   },
   zona3: {
-    es: 'Cruzá el puente y arrastrá a un amigo cerca de las luces del camino.',
-    en: 'Cross the bridge and drag a friend close to the path lights.',
-    pt: 'Atravesse a ponte e arraste um amigo perto das luzes do caminho.',
-    hi: 'पुल पार करो और किसी दोस्त को रास्ते की रोशनी के पास खींचो।',
-    id: 'Seberangi jembatan dan seret teman dekat lampu di jalan.',
-    ru: 'Перейди мост и перетащи друга поближе к огонькам на тропе.',
-    vi: 'Băng qua cầu và kéo một người bạn đến gần ánh sáng trên đường.',
-    zh: '过桥，把朋友拖到小路上的灯附近。',
-    ja: '橋を渡って、お友だちを道の光の近くまで引っぱろう。',
-    ko: '다리를 건너서 친구를 길 위의 불빛 가까이 끌어봐.',
+    es: 'Cruzá el puente y arrastrá a tu personaje cerca de las luces del camino.',
+    en: 'Cross the bridge and drag your character close to the path lights.',
+    pt: 'Atravesse a ponte e arraste seu personagem perto das luzes do caminho.',
+    hi: 'पुल पार करो और अपने किरदार को रास्ते की रोशनी के पास खींचो।',
+    id: 'Seberangi jembatan dan seret karaktermu dekat lampu di jalan.',
+    ru: 'Перейди мост и перетащи своего персонажа поближе к огонькам на тропе.',
+    vi: 'Băng qua cầu và kéo nhân vật của bạn đến gần ánh sáng trên đường.',
+    zh: '过桥，把你的角色拖到小路上的灯附近。',
+    ja: '橋を渡って、キャラクターを道の光の近くまで引っぱろう。',
+    ko: '다리를 건너서 네 캐릭터를 길 위의 불빛 가까이 끌어봐.',
   },
   zona4: {
-    es: 'Arrastrá a un amigo hasta el agua para que flote.',
-    en: 'Drag a friend into the water so they float.',
-    pt: 'Arraste um amigo até a água para que ele flutue.',
-    hi: 'किसी दोस्त को पानी तक खींचो ताकि वह तैरे।',
-    id: 'Seret seorang teman ke air supaya dia mengapung.',
-    ru: 'Перетащи друга в воду, чтобы он поплыл.',
-    vi: 'Kéo một người bạn xuống nước để bạn ấy nổi lên.',
-    zh: '把一个朋友拖到水里，让他漂起来。',
-    ja: 'お友だちを水の中まで引っぱって浮かせよう。',
-    ko: '친구를 물 속으로 끌어서 떠다니게 해봐.',
+    es: 'Arrastrá a tu personaje hasta el agua para que flote.',
+    en: 'Drag your character into the water so they float.',
+    pt: 'Arraste seu personagem até a água para que ele flutue.',
+    hi: 'अपने किरदार को पानी तक खींचो ताकि वह तैरे।',
+    id: 'Seret karaktermu ke air supaya dia mengapung.',
+    ru: 'Перетащи своего персонажа в воду, чтобы он поплыл.',
+    vi: 'Kéo nhân vật của bạn xuống nước để bạn ấy nổi lên.',
+    zh: '把你的角色拖到水里，让他漂起来。',
+    ja: 'キャラクターを水の中まで引っぱって浮かせよう。',
+    ko: '네 캐릭터를 물 속으로 끌어서 떠다니게 해봐.',
   },
   zona5: {
-    es: 'Arrastrá a un amigo cerca de las gotitas brillantes en las hojas.',
-    en: 'Drag a friend close to the sparkling dewdrops on the leaves.',
-    pt: 'Arraste um amigo perto das gotinhas brilhantes nas folhas.',
-    hi: 'किसी दोस्त को पत्तों की चमकती बूंदों के पास खींचो।',
-    id: 'Seret seorang teman dekat tetesan embun yang berkilau di daun.',
-    ru: 'Перетащи друга поближе к сверкающим капелькам на листьях.',
-    vi: 'Kéo một người bạn đến gần những giọt sương lấp lánh trên lá.',
-    zh: '把一个朋友拖到叶子上闪亮的露珠附近。',
-    ja: 'お友だちを葉っぱのキラキラした水玉の近くまで引っぱろう。',
-    ko: '친구를 잎사귀의 반짝이는 이슬방울 가까이 끌어봐.',
+    es: 'Arrastrá a tu personaje cerca de las gotitas brillantes en las hojas.',
+    en: 'Drag your character close to the sparkling dewdrops on the leaves.',
+    pt: 'Arraste seu personagem perto das gotinhas brilhantes nas folhas.',
+    hi: 'अपने किरदार को पत्तों की चमकती बूंदों के पास खींचो।',
+    id: 'Seret karaktermu dekat tetesan embun yang berkilau di daun.',
+    ru: 'Перетащи своего персонажа поближе к сверкающим капелькам на листьях.',
+    vi: 'Kéo nhân vật của bạn đến gần những giọt sương lấp lánh trên lá.',
+    zh: '把你的角色拖到叶子上闪亮的露珠附近。',
+    ja: 'キャラクターを葉っぱのキラキラした水玉の近くまで引っぱろう。',
+    ko: '네 캐릭터를 잎사귀의 반짝이는 이슬방울 가까이 끌어봐.',
   },
   zona6: {
-    es: 'Arrastrá a un amigo hasta las nubes de luciérnagas de colores.',
-    en: 'Drag a friend to the colorful firefly clouds.',
-    pt: 'Arraste um amigo até as nuvens coloridas de vaga-lumes.',
-    hi: 'किसी दोस्त को रंगीन जुगनुओं के बादलों तक खींचो।',
-    id: 'Seret seorang teman ke awan kunang-kunang warna-warni.',
-    ru: 'Перетащи друга к разноцветным облакам светлячков.',
-    vi: 'Kéo một người bạn đến những đám mây đom đóm nhiều màu.',
-    zh: '把一个朋友拖到彩色的萤火虫云那里。',
-    ja: 'お友だちを色とりどりのホタルの雲まで引っぱろう。',
-    ko: '친구를 알록달록한 반딧불이 구름까지 끌어봐.',
+    es: 'Arrastrá a tu personaje hasta las nubes de luciérnagas de colores.',
+    en: 'Drag your character to the colorful firefly clouds.',
+    pt: 'Arraste seu personagem até as nuvens coloridas de vaga-lumes.',
+    hi: 'अपने किरदार को रंगीन जुगनुओं के बादलों तक खींचो।',
+    id: 'Seret karaktermu ke awan kunang-kunang warna-warni.',
+    ru: 'Перетащи своего персонажа к разноцветным облакам светлячков.',
+    vi: 'Kéo nhân vật của bạn đến những đám mây đom đóm nhiều màu.',
+    zh: '把你的角色拖到彩色的萤火虫云那里。',
+    ja: 'キャラクターを色とりどりのホタルの雲まで引っぱろう。',
+    ko: '네 캐릭터를 알록달록한 반딧불이 구름까지 끌어봐.',
   },
   zona7: {
-    es: 'Arrastrá a un amigo cerca de las rocas brillantes para descubrir algo.',
-    en: 'Drag a friend close to the glowing rocks to discover something.',
-    pt: 'Arraste um amigo perto das pedras brilhantes para descobrir algo.',
-    hi: 'किसी दोस्त को चमकती चट्टानों के पास खींचो और कुछ खोजो।',
-    id: 'Seret seorang teman dekat batu yang bersinar untuk menemukan sesuatu.',
-    ru: 'Перетащи друга поближе к сияющим камням, чтобы что-то найти.',
-    vi: 'Kéo một người bạn đến gần những tảng đá phát sáng để khám phá điều gì đó.',
-    zh: '把一个朋友拖到发光的石头附近，发现点什么。',
-    ja: 'お友だちを光る岩の近くまで引っぱって何か見つけよう。',
-    ko: '친구를 빛나는 바위 가까이 끌어서 뭔가 발견해봐.',
+    es: 'Arrastrá a tu personaje cerca de las rocas brillantes para descubrir algo.',
+    en: 'Drag your character close to the glowing rocks to discover something.',
+    pt: 'Arraste seu personagem perto das pedras brilhantes para descobrir algo.',
+    hi: 'अपने किरदार को चमकती चट्टानों के पास खींचो और कुछ खोजो।',
+    id: 'Seret karaktermu dekat batu yang bersinar untuk menemukan sesuatu.',
+    ru: 'Перетащи своего персонажа поближе к сияющим камням, чтобы что-то найти.',
+    vi: 'Kéo nhân vật của bạn đến gần những tảng đá phát sáng để khám phá điều gì đó.',
+    zh: '把你的角色拖到发光的石头附近，发现点什么。',
+    ja: 'キャラクターを光る岩の近くまで引っぱって何か見つけよう。',
+    ko: '네 캐릭터를 빛나는 바위 가까이 끌어서 뭔가 발견해봐.',
   },
   zona8: {
-    es: 'Arrastrá a un amigo cerca de la entrada brillante de la cueva.',
-    en: 'Drag a friend close to the glowing cave entrance.',
-    pt: 'Arraste um amigo perto da entrada brilhante da caverna.',
-    hi: 'किसी दोस्त को गुफा के चमकते द्वार के पास खींचो।',
-    id: 'Seret seorang teman dekat pintu masuk gua yang bersinar.',
-    ru: 'Перетащи друга поближе к сияющему входу в пещеру.',
-    vi: 'Kéo một người bạn đến gần cửa hang sáng lấp lánh.',
-    zh: '把一个朋友拖到山洞发光的入口附近。',
-    ja: 'お友だちを洞窟の光る入り口の近くまで引っぱろう。',
-    ko: '친구를 동굴의 빛나는 입구 가까이 끌어봐.',
+    es: 'Arrastrá a tu personaje cerca de la entrada brillante de la cueva.',
+    en: 'Drag your character close to the glowing cave entrance.',
+    pt: 'Arraste seu personagem perto da entrada brilhante da caverna.',
+    hi: 'अपने किरदार को गुफा के चमकते द्वार के पास खींचो।',
+    id: 'Seret karaktermu dekat pintu masuk gua yang bersinar.',
+    ru: 'Перетащи своего персонажа поближе к сияющему входу в пещеру.',
+    vi: 'Kéo nhân vật của bạn đến gần cửa hang sáng lấp lánh.',
+    zh: '把你的角色拖到山洞发光的入口附近。',
+    ja: 'キャラクターを洞窟の光る入り口の近くまで引っぱろう。',
+    ko: '네 캐릭터를 동굴의 빛나는 입구 가까이 끌어봐.',
   },
   zona9: {
     es: 'Juntá todas las luces del bosque para abrir el portal.',
@@ -249,16 +249,24 @@ const hablar = (clave: string) => {
     window.speechSynthesis.speak(u);
   } catch {}
 };
-const hablarTexto = (texto: string) => {
+const hablarTexto = (texto: string, onEnd?: () => void) => {
   if (mutedGlobal) return;
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) { if (onEnd) setTimeout(onEnd, 1200); return; }
   try {
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(texto);
     u.lang = LOCALE_VOZ[idiomaGlobal] || 'es-419';
     u.rate = 0.95; u.pitch = 1.2; u.volume = 1;
+    if (onEnd) {
+      let terminado = false;
+      const finalizar = () => { if (terminado) return; terminado = true; onEnd(); };
+      u.onend = finalizar;
+      u.onerror = finalizar;
+      // Respaldo por si el navegador nunca dispara onend/onerror (pasa en algunos Android)
+      setTimeout(finalizar, Math.max(1800, texto.length * 90));
+    }
     window.speechSynthesis.speak(u);
-  } catch {}
+  } catch { if (onEnd) setTimeout(onEnd, 1200); }
 };
 
 const PROGRESO_TXT = {
@@ -357,11 +365,19 @@ export default function Mundo1() {
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [portalNudge, setPortalNudge] = useState(false);
   const [muted, setMuted] = useState(false);
-  const [idioma, setIdioma] = useState<string>(IDIOMA_DETECTADO);
+  const [idioma, setIdioma] = useState<string>('es');
   const burstId = useRef(0);
 
   useEffect(() => { mutedGlobal = muted; }, [muted]);
   useEffect(() => { idiomaGlobal = idioma; }, [idioma]);
+
+  // El idioma real (detectado o guardado) se aplica recien montado en el cliente,
+  // para que el primer render coincida siempre con el HTML del servidor (evita
+  // errores de hidratacion que podian tirar abajo toda la pagina).
+  useEffect(() => {
+    const real = detectarIdiomaInicial();
+    if (real !== 'es') setIdioma(real);
+  }, []);
 
   const elegirIdioma = useCallback((id: string) => {
     setIdioma(id);
@@ -673,33 +689,44 @@ export default function Mundo1() {
 
   useEffect(() => {
     if (!mostrarPresentacion) return;
+    let cancelado = false;
+
     if (presentacionIdx === 0) {
       const t0 = setTimeout(() => {
+        if (cancelado) return;
         melody([523, 659, 784], 80, 0.3, 0.18);
         vib(15);
-        hablarTexto(FRASES.presentacionIntro[idiomaGlobal] || FRASES.presentacionIntro.es);
+        hablarTexto(FRASES.presentacionIntro[idiomaGlobal] || FRASES.presentacionIntro.es, () => {
+          if (cancelado) return;
+          setTimeout(() => { if (!cancelado) setPresentacionIdx(1); }, 500);
+        });
       }, 600);
-      const t1 = setTimeout(() => setPresentacionIdx(1), 4800);
-      return () => { clearTimeout(t0); clearTimeout(t1); };
+      return () => { cancelado = true; clearTimeout(t0); };
     }
+
     const i = presentacionIdx - 1;
     if (i < TODOS_PERSONAJES.length) {
       const t = setTimeout(() => {
+        if (cancelado) return;
         note(880, 0.15, 0.15);
         vib(10);
-        hablarTexto(TODOS_PERSONAJES[i].nombre);
+        hablarTexto(TODOS_PERSONAJES[i].nombre, () => {
+          if (cancelado) return;
+          setTimeout(() => { if (!cancelado) setPresentacionIdx(p => p + 1); }, 450);
+        });
       }, 350);
-      const t2 = setTimeout(() => setPresentacionIdx(p => p + 1), 2100);
-      return () => { clearTimeout(t); clearTimeout(t2); };
+      return () => { cancelado = true; clearTimeout(t); };
     }
+
     if (i === TODOS_PERSONAJES.length) {
       // Ya se nombraron los 10 — ahora se indica que elija uno para jugar
       const t3 = setTimeout(() => {
+        if (cancelado) return;
         melody([659, 784, 988], 90, 0.3, 0.2);
         vib([15, 15, 30]);
         hablarTexto(FRASES.elegirParaJugar[idiomaGlobal] || FRASES.elegirParaJugar.es);
       }, 500);
-      return () => clearTimeout(t3);
+      return () => { cancelado = true; clearTimeout(t3); };
     }
   }, [mostrarPresentacion, presentacionIdx]);
 
@@ -821,11 +848,42 @@ export default function Mundo1() {
       abrirMapaConSonido();
       // Se corta el gesto de arrastre limpiamente: el mapa toma el control de la pantalla.
       if (dragState.current) {
-        setSquash(prev => ({ ...prev, [dragState.current!.key]: null }));
+        const keyAlSoltar = dragState.current.key;
         dragState.current = null;
+        autoScrollDir.current = 0;
+        setSquash(prev => ({ ...prev, [keyAlSoltar]: null }));
       }
     }
   }, [abrirMapaConSonido]);
+
+  // Auto-scroll al arrastrar cerca del borde de la pantalla: el fondo se mueve solo
+  // y el personaje se mantiene "pegado" al dedo (se compensa el offset del scroll).
+  const autoScrollDir = useRef<0 | 1 | -1>(0);
+  const autoScrollRAF = useRef<number | null>(null);
+
+  const runAutoScroll = useCallback(() => {
+    const dir = autoScrollDir.current;
+    const el = scrollRef.current;
+    const ds = dragState.current;
+    if (dir !== 0 && el && ds) {
+      const speed = 10; // px por frame, ritmo suave y predecible para 2-5 anios
+      const prevScroll = el.scrollLeft;
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      el.scrollLeft = Math.max(0, Math.min(maxScroll, prevScroll + dir * speed));
+      const aplicado = el.scrollLeft - prevScroll;
+      if (aplicado !== 0) {
+        setDragPos(prev => {
+          const cur = prev[ds.key] || { x: 0, y: 0 };
+          return { ...prev, [ds.key]: { x: cur.x + aplicado, y: cur.y } };
+        });
+      }
+    }
+    if (dragState.current && autoScrollDir.current !== 0) {
+      autoScrollRAF.current = requestAnimationFrame(runAutoScroll);
+    } else {
+      autoScrollRAF.current = null;
+    }
+  }, []);
 
   const onDragMove = useCallback((e: React.PointerEvent) => {
     const ds = dragState.current;
@@ -875,7 +933,19 @@ export default function Mundo1() {
         if (zoneOfKey === 0 && !showMap) chequearTroncoMapa(e);
       }
     }
-  }, [chequearHotspots, chequearPuntosTematicos, chequearTroncoMapa, showMap]);
+
+    // Auto-scroll de borde: si el dedo esta cerca del borde izquierdo o derecho
+    // de la pantalla, el fondo se desplaza solo mientras dure el arrastre.
+    const EDGE = 64;
+    const vw = window.innerWidth;
+    let dir: 0 | 1 | -1 = 0;
+    if (e.clientX < EDGE) dir = -1;
+    else if (e.clientX > vw - EDGE) dir = 1;
+    autoScrollDir.current = dir;
+    if (dir !== 0 && autoScrollRAF.current === null) {
+      autoScrollRAF.current = requestAnimationFrame(runAutoScroll);
+    }
+  }, [chequearHotspots, chequearPuntosTematicos, chequearTroncoMapa, showMap, runAutoScroll]);
 
   const endDrag = useCallback((zi: number) => (e: React.PointerEvent) => {
     const ds = dragState.current;
@@ -888,6 +958,7 @@ export default function Mundo1() {
     chequearReaccion(zi, key, e);
     coast(key, ds.vx, ds.vy);
     dragState.current = null;
+    autoScrollDir.current = 0;
   }, [coast, chequearReaccion, chequearHotspots]);
 
   const zonaCompleta = useCallback((zi: number) => {
@@ -974,20 +1045,19 @@ export default function Mundo1() {
               style={{ objectFit: 'cover', objectPosition: 'center' }}
             />
 
-            {/* Tronco-mapa en la entrada (Zona 1) */}
+            {/* Tronco-mapa en la entrada (Zona 1) — decorativo: se abre al pasar el personaje encima */}
             {zi === 0 && (
-              <button
-                onClick={abrirMapaConSonido}
-                aria-label="Abrir mapa del bosque"
+              <div
+                aria-hidden="true"
                 style={{
                   position: 'absolute', left: '22%', top: '66%', transform: 'translate(-50%,-50%)',
                   width: '17%', aspectRatio: '1/1', borderRadius: '50%', border: '5px solid rgba(255,215,120,.9)',
                   background: 'radial-gradient(circle, rgba(255,215,120,.45), rgba(255,215,120,.08))',
                   boxShadow: '0 0 30px rgba(255,215,120,.6)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6vh',
-                  cursor: 'pointer', zIndex: 22, animation: 'mapPulse 2s ease-in-out infinite',
+                  pointerEvents: 'none', zIndex: 22, animation: 'mapPulse 2s ease-in-out infinite',
                 }}
-              >🗺️</button>
+              >🗺️</div>
             )}
 
             {/* Personajes anfitriones: Toqwow + Tizi + Coti en la Arboleda (Zona 2) — arrastrables */}
