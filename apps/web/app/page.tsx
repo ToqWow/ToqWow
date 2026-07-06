@@ -7,7 +7,7 @@ const COLS = ['#B8A9FF','#00D4C8','#FFD700','#FFB3D1','#A8EDEA','#87CEEB'];
 
 const MUNDOS = [
   { id:0,  emoji:'🌍', nombre:'Planeta Tiqui',     free:true,  color:'#00D4C8', glow:'rgba(0,212,200,.7)',   desc:'Explora el espacio' },
-  { id:1,  emoji:'🦕', nombre:'Dinos del Espacio',  free:true,  color:'#7CFC00', glow:'rgba(124,252,0,.7)',   desc:'¡Ruge con ellos!' },
+  { id:1,  emoji:'✨', nombre:'Bosque de las Luciérnagas',  free:true,  color:'#FFD966', glow:'rgba(255,217,102,.7)',   desc:'10 zonas mágicas' },
   { id:2,  emoji:'🌲', nombre:'Bosque Encantado',   free:true,  color:'#98FB98', glow:'rgba(152,251,152,.7)', desc:'Criaturas mágicas' },
   { id:3,  emoji:'☁️', nombre:'Ciudad de Nubes',    free:false, color:'#87CEEB', glow:'rgba(135,206,235,.7)', desc:'Pack 3 · $3.99' },
   { id:4,  emoji:'🐠', nombre:'Océano de Cristal',  free:false, color:'#0088cc', glow:'rgba(0,136,204,.7)',   desc:'Pack 4 · $3.99' },
