@@ -44,6 +44,31 @@ export default function Mundo1() {
   const [portalNudge, setPortalNudge] = useState(false);
   const burstId = useRef(0);
 
+  const [dragPos, setDragPos] = useState<Record<string, { x: number; y: number }>>({});
+  const dragState = useRef<{ key: string; startClientX: number; startClientY: number; startX: number; startY: number } | null>(null);
+
+  const startDrag = useCallback((key: string) => (e: React.PointerEvent) => {
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    const current = dragPos[key] || { x: 0, y: 0 };
+    dragState.current = { key, startClientX: e.clientX, startClientY: e.clientY, startX: current.x, startY: current.y };
+    note(660, 0.15, 0.15);
+    vib(10);
+  }, [dragPos]);
+
+  const onDragMove = useCallback((e: React.PointerEvent) => {
+    if (!dragState.current) return;
+    const { key, startClientX, startClientY, startX, startY } = dragState.current;
+    const dx = e.clientX - startClientX;
+    const dy = e.clientY - startClientY;
+    setDragPos(prev => ({ ...prev, [key]: { x: startX + dx, y: startY + dy } }));
+  }, []);
+
+  const endDrag = useCallback(() => {
+    if (dragState.current) { note(523, 0.18, 0.15); }
+    dragState.current = null;
+  }, []);
+
   useEffect(() => {
     const seen = typeof window !== 'undefined' && window.localStorage.getItem('toqwow_mundo1_tutorial_visto');
     if (seen) setShowGuide(false);
@@ -151,17 +176,27 @@ export default function Mundo1() {
               >🗺️</button>
             )}
 
-            {/* Personajes anfitriones: Toqwow + Tizi + Coti en la Arboleda (Zona 2) */}
+            {/* Personajes anfitriones: Toqwow + Tizi + Coti en la Arboleda (Zona 2) — arrastrables */}
             {zi === 1 && (
               <>
-                <img src="/assets/mundo1/char_tizi_v3.png" alt="Tizi" style={{
-                  position: 'absolute', left: '38%', top: '58%', width: '9%', zIndex: 18,
-                  animation: 'charBounce 2.4s ease-in-out infinite', filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
-                }} />
-                <img src="/assets/mundo1/char_coti_v3.png" alt="Coti" style={{
-                  position: 'absolute', left: '47%', top: '60%', width: '8.5%', zIndex: 17,
-                  animation: 'charBounce 2.6s ease-in-out infinite .3s', filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
-                }} />
+                <img
+                  src="/assets/mundo1/char_tizi_v3.png" alt="Tizi"
+                  onPointerDown={startDrag(`tizi-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag} onPointerCancel={endDrag}
+                  style={{
+                    position: 'absolute', left: '38%', top: '58%', width: '9%', zIndex: 18, cursor: 'grab', touchAction: 'none',
+                    transform: `translate(${dragPos[`tizi-${zi}`]?.x || 0}px, ${dragPos[`tizi-${zi}`]?.y || 0}px)`,
+                    animation: dragState.current?.key === `tizi-${zi}` ? 'none' : 'charBounce 2.4s ease-in-out infinite',
+                    filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
+                  }} />
+                <img
+                  src="/assets/mundo1/char_coti_v3.png" alt="Coti"
+                  onPointerDown={startDrag(`coti-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag} onPointerCancel={endDrag}
+                  style={{
+                    position: 'absolute', left: '47%', top: '60%', width: '8.5%', zIndex: 17, cursor: 'grab', touchAction: 'none',
+                    transform: `translate(${dragPos[`coti-${zi}`]?.x || 0}px, ${dragPos[`coti-${zi}`]?.y || 0}px)`,
+                    animation: dragState.current?.key === `coti-${zi}` ? 'none' : 'charBounce 2.6s ease-in-out infinite .3s',
+                    filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
+                  }} />
               </>
             )}
 
@@ -213,11 +248,16 @@ export default function Mundo1() {
               />
             )}
 
-            {/* Toqwow como companero flotante, presente en todas las zonas */}
-            <img src="/assets/mundo1/char_toqwow_v3.png" alt="Toqwow" style={{
-              position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19,
-              animation: 'charBounce 2.2s ease-in-out infinite .15s', filter: 'drop-shadow(0 10px 12px rgba(0,0,0,.45))',
-            }} />
+            {/* Toqwow como companero flotante, presente en todas las zonas — arrastrable */}
+            <img
+              src="/assets/mundo1/char_toqwow_v3.png" alt="Toqwow"
+              onPointerDown={startDrag(`toqwow-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag} onPointerCancel={endDrag}
+              style={{
+                position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19, cursor: 'grab', touchAction: 'none',
+                transform: `translate(${dragPos[`toqwow-${zi}`]?.x || 0}px, ${dragPos[`toqwow-${zi}`]?.y || 0}px)`,
+                animation: dragState.current?.key === `toqwow-${zi}` ? 'none' : 'charBounce 2.2s ease-in-out infinite .15s',
+                filter: 'drop-shadow(0 10px 12px rgba(0,0,0,.45))',
+              }} />
 
             {/* Portal en Zona 10: gated por progreso */}
             {zi === 9 && (
