@@ -16,9 +16,9 @@ const IDIOMA_DETECTADO = typeof navigator !== 'undefined' ? (navigator.language 
 const LOCALE_VOZ: Record<string, string> = { es: 'es-419', en: 'en-US', pt: 'pt-BR', fr: 'fr-FR', id: 'id-ID', sw: 'sw-KE', hi: 'hi-IN' };
 const FRASES: Record<string, Record<string, string>> = {
   bienvenida: {
-    es: '¡Hola! Soy Toqwow. Arrastrame por el bosque y tocá las lucesitas brillantes.',
-    en: "Hi! I'm Toqwow. Drag me around the forest and tap the glowing lights.",
-    pt: 'Oi! Eu sou o Toqwow. Me arraste pela floresta e toque as lucinhas brilhantes.',
+    es: '¡Hola! Soy Toqwow. Arrastrame por el bosque hasta las lucesitas brillantes.',
+    en: "Hi! I'm Toqwow. Drag me around the forest to the glowing lights.",
+    pt: 'Oi! Eu sou o Toqwow. Me arraste pela floresta até as lucinhas brilhantes.',
   },
   mapa: {
     es: 'Este es el mapa del bosque. Tocá una zona para ir ahí.',
@@ -45,25 +45,30 @@ const FRASES: Record<string, Record<string, string>> = {
     en: 'A new friend arrived in the forest!',
     pt: 'Um novo amigo chegou à floresta!',
   },
+  presentacionIntro: {
+    es: '¡Hola! Soy Toqwow. Estos son mis amigos del bosque. Elegí con quién querés jugar. Podés cambiar cuando quieras.',
+    en: "Hi! I'm Toqwow. These are my forest friends. Pick who you want to play with. You can change anytime.",
+    pt: 'Oi! Eu sou o Toqwow. Estes são meus amigos da floresta. Escolha com quem você quer brincar. Você pode trocar quando quiser.',
+  },
   zona0: {
     es: 'Tocá el mapa dorado para ver todo el bosque.',
     en: 'Tap the golden map to see the whole forest.',
     pt: 'Toque no mapa dourado para ver toda a floresta.',
   },
   zona1: {
-    es: 'Tocá las lucesitas brillantes para juntarlas.',
-    en: 'Tap the glowing lights to collect them.',
-    pt: 'Toque nas lucinhas brilhantes para coletá-las.',
+    es: 'Arrastrá a un amigo hasta las lucesitas brillantes para juntarlas.',
+    en: 'Drag a friend to the glowing lights to collect them.',
+    pt: 'Arraste um amigo até as lucinhas brilhantes para coletá-las.',
   },
   zona2: {
-    es: 'Tocá las puertas de las casitas de hongo.',
-    en: 'Tap the doors of the little mushroom houses.',
-    pt: 'Toque nas portas das casinhas de cogumelo.',
+    es: 'Arrastrá a un amigo hasta las puertas de las casitas de hongo.',
+    en: 'Drag a friend to the doors of the little mushroom houses.',
+    pt: 'Arraste um amigo até as portas das casinhas de cogumelo.',
   },
   zona3: {
-    es: 'Cruzá el puente y tocá las luces del camino.',
-    en: 'Cross the bridge and tap the lights on the path.',
-    pt: 'Atravesse a ponte e toque nas luzes do caminho.',
+    es: 'Cruzá el puente y arrastrá a un amigo cerca de las luces del camino.',
+    en: 'Cross the bridge and drag a friend close to the path lights.',
+    pt: 'Atravesse a ponte e arraste um amigo perto das luzes do caminho.',
   },
   zona4: {
     es: 'Arrastrá a un amigo hasta el agua para que flote.',
@@ -71,24 +76,24 @@ const FRASES: Record<string, Record<string, string>> = {
     pt: 'Arraste um amigo até a água para que ele flutue.',
   },
   zona5: {
-    es: 'Tocá las gotitas brillantes en las hojas.',
-    en: 'Tap the sparkling dewdrops on the leaves.',
-    pt: 'Toque nas gotinhas brilhantes nas folhas.',
+    es: 'Arrastrá a un amigo cerca de las gotitas brillantes en las hojas.',
+    en: 'Drag a friend close to the sparkling dewdrops on the leaves.',
+    pt: 'Arraste um amigo perto das gotinhas brilhantes nas folhas.',
   },
   zona6: {
-    es: 'Tocá las nubes de luciérnagas de colores.',
-    en: 'Tap the colorful firefly clouds.',
-    pt: 'Toque nas nuvens coloridas de vaga-lumes.',
+    es: 'Arrastrá a un amigo hasta las nubes de luciérnagas de colores.',
+    en: 'Drag a friend to the colorful firefly clouds.',
+    pt: 'Arraste um amigo até as nuvens coloridas de vaga-lumes.',
   },
   zona7: {
-    es: 'Tocá las rocas brillantes para descubrir algo.',
-    en: 'Tap the glowing rocks to discover something.',
-    pt: 'Toque nas pedras brilhantes para descobrir algo.',
+    es: 'Arrastrá a un amigo cerca de las rocas brillantes para descubrir algo.',
+    en: 'Drag a friend close to the glowing rocks to discover something.',
+    pt: 'Arraste um amigo perto das pedras brilhantes para descobrir algo.',
   },
   zona8: {
-    es: 'Acercate a la entrada brillante de la cueva.',
-    en: 'Get close to the glowing cave entrance.',
-    pt: 'Aproxime-se da entrada brilhante da caverna.',
+    es: 'Arrastrá a un amigo cerca de la entrada brillante de la cueva.',
+    en: 'Drag a friend close to the glowing cave entrance.',
+    pt: 'Arraste um amigo perto da entrada brilhante da caverna.',
   },
   zona9: {
     es: 'Juntá todas las luces del bosque para abrir el portal.',
@@ -169,6 +174,9 @@ export default function Mundo1() {
   const trailId = useRef(0);
   const lastTrailT = useRef<Record<string, number>>({});
   const [showGuide, setShowGuide] = useState(true);
+  const [mostrarPresentacion, setMostrarPresentacion] = useState(false);
+  const [presentacionIdx, setPresentacionIdx] = useState(0);
+  const [personajeActivo, setPersonajeActivo] = useState<string>('toqwow');
   const [showMap, setShowMap] = useState(false);
   const [portalNudge, setPortalNudge] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -200,6 +208,13 @@ export default function Mundo1() {
     { id: 'copo', src: 'char_copo.png', nombre: 'Copo de Nieve' },
     { id: 'vago', src: 'char_vago_v2.png', nombre: 'Vago' },
     { id: 'michi', src: 'char_michi_v2.png', nombre: 'Michi' },
+  ];
+  // Roster completo (10) para la presentacion inicial y referencia general
+  const TODOS_PERSONAJES = [
+    { id: 'toqwow', src: 'char_toqwow_v3.png', nombre: 'Toqwow' },
+    { id: 'tizi', src: 'char_tizi_v3.png', nombre: 'Tizi' },
+    { id: 'coti', src: 'char_coti_v3.png', nombre: 'Coti' },
+    ...AMIGOS_EXTRA,
   ];
   const [amigosEnJuego, setAmigosEnJuego] = useState<Record<string, number>>({}); // id -> zonaIdx donde esta parado
   const [zonaVisible, setZonaVisible] = useState(0);
@@ -242,7 +257,7 @@ export default function Mundo1() {
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || mostrarPresentacion) return;
     let debounce: ReturnType<typeof setTimeout>;
     const onScroll = () => {
       clearTimeout(debounce);
@@ -253,10 +268,10 @@ export default function Mundo1() {
       }, 350);
     };
     el.addEventListener('scroll', onScroll, { passive: true });
-    // Mostrar cartel de la Zona 0 apenas se carga el mundo
-    setTimeout(() => mostrarCartelZona(0), 3400);
-    return () => { el.removeEventListener('scroll', onScroll); clearTimeout(debounce); };
-  }, [detectarZonaVisible, mostrarCartelZona]);
+    // Mostrar cartel de la Zona 0 apenas se carga el mundo (o apenas se cierra la presentacion)
+    const t = setTimeout(() => mostrarCartelZona(0), 1200);
+    return () => { el.removeEventListener('scroll', onScroll); clearTimeout(debounce); clearTimeout(t); };
+  }, [detectarZonaVisible, mostrarCartelZona, mostrarPresentacion]);
 
   const convocarAmigo = useCallback((id: string) => {
     setAmigosEnJuego(prev => ({ ...prev, [id]: zonaVisible }));
@@ -272,6 +287,8 @@ export default function Mundo1() {
   const [floating, setFloating] = useState<Record<string, boolean>>({});
   const dragState = useRef<DragInfo | null>(null);
   const rafRef = useRef<Record<string, number>>({});
+  const lastRunSoundT = useRef<Record<string, number>>({});
+  const runStepAlto = useRef<Record<string, boolean>>({});
 
   const clearCoast = (key: string) => {
     if (rafRef.current[key]) { cancelAnimationFrame(rafRef.current[key]); delete rafRef.current[key]; }
@@ -285,6 +302,7 @@ export default function Mundo1() {
     const now = performance.now();
     dragState.current = { key, startClientX: e.clientX, startClientY: e.clientY, startX: current.x, startY: current.y, lastX: e.clientX, lastY: e.clientY, lastT: now, vx: 0, vy: 0 };
     setSquash(prev => ({ ...prev, [key]: 'grab' }));
+    setPersonajeActivo(key.slice(0, key.lastIndexOf('-')));
     note(660, 0.15, 0.15); vib(10);
   }, [dragPos]);
 
@@ -299,6 +317,18 @@ export default function Mundo1() {
     const dx = e.clientX - ds.startClientX;
     const dy = e.clientY - ds.startClientY;
     setDragPos(prev => ({ ...prev, [ds.key]: { x: ds.startX + dx, y: ds.startY + dy } }));
+
+    // Sonido de "carrera" mientras se mueve el personaje arrastrado (sintetizado, tipo saltito 8-bit)
+    const movimientoReal = Math.abs(ds.vx) + Math.abs(ds.vy) > 0.03;
+    if (movimientoReal) {
+      const lastRun = lastRunSoundT.current[ds.key] || 0;
+      if (now - lastRun > 150) {
+        lastRunSoundT.current[ds.key] = now;
+        const alto = !runStepAlto.current[ds.key];
+        runStepAlto.current[ds.key] = alto;
+        note(alto ? 520 : 415, 0.09, 0.05, 'square');
+      }
+    }
 
     // Zona 1 "Puerta de Musgo": rastro de florcitas al pasar bajo el arco
     const zoneOfKey = parseInt(ds.key.split('-').pop() || '-1', 10);
@@ -357,6 +387,7 @@ export default function Mundo1() {
     ],
   };
   const RADIO_REACCION = 220; // px en coordenadas nativas de la zona (2752x1536)
+  const RADIO_HOTSPOT = 210; // px en coordenadas nativas — mismo criterio que los puntos tematicos
   const [rumbleZona, setRumbleZona] = useState<number | null>(null);
 
   // Reacciones de personalidad: que hace CADA personaje al soltarlo en CADA zona (segun el GDD)
@@ -480,18 +511,6 @@ export default function Mundo1() {
     chequearPuntosTematicos(zi, e);
   }, [floating, chequearPuntosTematicos, collected]);
 
-  const endDrag = useCallback((zi: number) => (e: React.PointerEvent) => {
-    const ds = dragState.current;
-    if (!ds) return;
-    const key = ds.key;
-    note(523, 0.18, 0.15);
-    setSquash(prev => ({ ...prev, [key]: 'drop' }));
-    setTimeout(() => setSquash(prev => ({ ...prev, [key]: null })), 220);
-    chequearReaccion(zi, key, e);
-    coast(key, ds.vx, ds.vy);
-    dragState.current = null;
-  }, [coast, chequearReaccion]);
-
   const squashTransform = (key: string) => {
     const sq = squash[key];
     if (sq === 'grab') return 'scale(0.88,1.12)';
@@ -500,10 +519,38 @@ export default function Mundo1() {
   };
 
 
+  // Presentacion inicial: Toqwow nombra a los 10 personajes disponibles desde el dia 1,
+  // una sola vez por dispositivo. El nino puede cambiar de personaje activo en cualquier
+  // zona despues (bandeja + Tizi/Coti/Toqwow siempre presentes).
+  useEffect(() => {
+    const yaPresentado = typeof window !== 'undefined' && window.localStorage.getItem('toqwow_personajes_presentados');
+    setMostrarPresentacion(!yaPresentado);
+  }, []);
+
+  useEffect(() => {
+    if (!mostrarPresentacion) return;
+    if (presentacionIdx === 0) {
+      const t0 = setTimeout(() => hablarTexto(FRASES.presentacionIntro[idiomaGlobal] || FRASES.presentacionIntro.es), 500);
+      const t1 = setTimeout(() => setPresentacionIdx(1), 3600);
+      return () => { clearTimeout(t0); clearTimeout(t1); };
+    }
+    const i = presentacionIdx - 1;
+    if (i >= TODOS_PERSONAJES.length) return;
+    const t = setTimeout(() => hablarTexto(TODOS_PERSONAJES[i].nombre), 150);
+    const t2 = setTimeout(() => setPresentacionIdx(p => p + 1), 1150);
+    return () => { clearTimeout(t); clearTimeout(t2); };
+  }, [mostrarPresentacion, presentacionIdx]);
+
+  const cerrarPresentacion = useCallback((idElegido?: string) => {
+    setMostrarPresentacion(false);
+    if (idElegido) setPersonajeActivo(idElegido);
+    try { window.localStorage.setItem('toqwow_personajes_presentados', '1'); } catch {}
+    setTimeout(() => hablar('bienvenida'), 500);
+  }, []);
+
   useEffect(() => {
     const seen = typeof window !== 'undefined' && window.localStorage.getItem('toqwow_mundo1_tutorial_visto');
     if (seen) setShowGuide(false);
-    else setTimeout(() => hablar('bienvenida'), 900);
   }, []);
 
   const dismissGuide = useCallback(() => {
@@ -558,6 +605,48 @@ export default function Mundo1() {
     vib(20);
     if (showGuide) dismissGuide();
   }, [showGuide, dismissGuide, dispararWow]);
+
+  // Las lucesitas ya no se completan al tocarlas: se completan al soltar un personaje
+  // arrastrado cerca (mismo criterio de proximidad que los puntos tematicos). Devuelve
+  // true si activo alguna, para que endDrag sepa que hubo match.
+  const chequearHotspots = useCallback((zi: number, e: React.PointerEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const container = target.closest('[data-zona-container]') as HTMLElement | null;
+    if (!container) return false;
+    const contRect = container.getBoundingClientRect();
+    const relX = (rect.left + rect.width / 2 - contRect.left) / contRect.width;
+    const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
+    const nativeX = relX * ZONA_WIDTH;
+    const nativeY = relY * ZONA_HEIGHT;
+    const zona = ZONAS[zi];
+    for (let hi = 0; hi < zona.hotspots.length; hi++) {
+      const key = `${zi}-${hi}`;
+      if (collected.has(key)) continue;
+      const h = zona.hotspots[hi];
+      const dist = Math.hypot(nativeX - h.x, nativeY - h.y);
+      if (dist < RADIO_HOTSPOT) {
+        const px = contRect.left + (h.x / ZONA_WIDTH) * contRect.width;
+        const py = contRect.top + (h.y / ZONA_HEIGHT) * contRect.height;
+        activarHotspot(zi, hi, px, py);
+        return true;
+      }
+    }
+    return false;
+  }, [collected, activarHotspot]);
+
+  const endDrag = useCallback((zi: number) => (e: React.PointerEvent) => {
+    const ds = dragState.current;
+    if (!ds) return;
+    const key = ds.key;
+    note(523, 0.18, 0.15);
+    setSquash(prev => ({ ...prev, [key]: 'drop' }));
+    setTimeout(() => setSquash(prev => ({ ...prev, [key]: null })), 220);
+    chequearHotspots(zi, e);
+    chequearReaccion(zi, key, e);
+    coast(key, ds.vx, ds.vy);
+    dragState.current = null;
+  }, [coast, chequearReaccion, chequearHotspots]);
 
   const zonaCompleta = useCallback((zi: number) => {
     return ZONAS[zi].hotspots.every((_, hi) => collected.has(`${zi}-${hi}`));
@@ -700,18 +789,13 @@ export default function Mundo1() {
               const leftPct = (h.x / ZONA_WIDTH) * 100;
               const topPct = (h.y / ZONA_HEIGHT) * 100;
               return (
-                <button
+                <div
                   key={hi}
-                  aria-label={`Punto interactivo ${hi + 1} de ${zona.nombre}`}
-                  onClick={(e) => {
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    activarHotspot(zi, hi, rect.left + rect.width / 2, rect.top + rect.height / 2);
-                  }}
+                  aria-hidden="true"
                   style={{
                     position: 'absolute', left: `${leftPct}%`, top: `${topPct}%`,
                     transform: 'translate(-50%,-50%)', width: '5%', aspectRatio: '1/1',
-                    background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
-                    zIndex: 20,
+                    pointerEvents: 'none', zIndex: 20,
                   }}
                 >
                   <img
@@ -723,7 +807,7 @@ export default function Mundo1() {
                       filter: 'drop-shadow(0 0 8px rgba(180,150,255,.7))',
                     }}
                   />
-                </button>
+                </div>
               );
             })}
 
@@ -882,6 +966,7 @@ export default function Mundo1() {
       }}>
         {AMIGOS_EXTRA.map(amigo => {
           const enJuego = amigosEnJuego[amigo.id] !== undefined;
+          const activo = personajeActivo === amigo.id;
           return (
             <button
               key={amigo.id}
@@ -889,9 +974,10 @@ export default function Mundo1() {
               aria-label={`Convocar a ${amigo.nombre}`}
               style={{
                 flexShrink: 0, width: 46, height: 46, borderRadius: '50%',
-                border: enJuego ? '2px solid rgba(255,220,150,.9)' : '2px solid rgba(255,255,255,.35)',
+                border: activo ? '3px solid rgba(255,220,150,1)' : enJuego ? '2px solid rgba(255,220,150,.9)' : '2px solid rgba(255,255,255,.35)',
+                boxShadow: activo ? '0 0 12px rgba(255,220,150,.85)' : 'none',
                 background: 'rgba(20,10,40,.55)', backdropFilter: 'blur(6px)',
-                padding: 4, cursor: 'pointer', opacity: enJuego ? 1 : 0.75,
+                padding: 4, cursor: 'pointer', opacity: enJuego || activo ? 1 : 0.75,
               }}
             >
               <img src={`/assets/mundo1/${amigo.src}`} alt={amigo.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
@@ -905,6 +991,57 @@ export default function Mundo1() {
         ⟵ Deslizá para explorar el bosque ⟶
       </div>
 
+      {/* OVERLAY: Presentacion inicial — Toqwow nombra a los 10 personajes, una sola vez */}
+      {mostrarPresentacion && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(10,5,20,.92)', backdropFilter: 'blur(8px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '5vh 5vw' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#ffe8d6', textAlign: 'center', marginBottom: 22, maxWidth: 420, lineHeight: 1.4 }}>
+            {FRASES.presentacionIntro.es}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, maxWidth: 460 }}>
+            {TODOS_PERSONAJES.map((p, i) => {
+              const enFoco = presentacionIdx - 1 === i;
+              const yaMostrado = presentacionIdx - 1 > i || presentacionIdx > TODOS_PERSONAJES.length;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => cerrarPresentacion(p.id)}
+                  aria-label={`Elegir a ${p.nombre}`}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    opacity: presentacionIdx === 0 ? 0.5 : (enFoco || yaMostrado ? 1 : 0.4),
+                    transform: enFoco ? 'scale(1.18)' : 'scale(1)',
+                    transition: 'transform .3s ease, opacity .3s ease',
+                  }}
+                >
+                  <div style={{
+                    width: 56, height: 56, borderRadius: '50%', padding: 4,
+                    border: enFoco ? '3px solid rgba(255,220,150,1)' : '2px solid rgba(255,255,255,.3)',
+                    boxShadow: enFoco ? '0 0 16px rgba(255,220,150,.9)' : 'none',
+                  }}>
+                    <img src={`/assets/mundo1/${p.src}`} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: 'white', fontWeight: 600 }}>{p.nombre}</div>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 26, display: 'flex', gap: 12 }}>
+            {presentacionIdx > TODOS_PERSONAJES.length ? (
+              <button
+                onClick={() => cerrarPresentacion(personajeActivo)}
+                style={{ background: 'rgba(255,220,150,.95)', border: 'none', borderRadius: 50, padding: '10px 26px', fontSize: 14, fontWeight: 700, color: '#3a2a1a', cursor: 'pointer' }}
+              >¡Empezar a jugar! 🌟</button>
+            ) : (
+              <button
+                onClick={() => cerrarPresentacion()}
+                style={{ background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.3)', borderRadius: 50, padding: '9px 22px', fontSize: 13, color: 'white', cursor: 'pointer' }}
+              >Saltar</button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* OVERLAY: Mapa del Bosque */}
       {showMap && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(10,5,20,.88)', backdropFilter: 'blur(6px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '5vh 4vw' }}>
@@ -917,7 +1054,7 @@ export default function Mundo1() {
               🗺️ Mapa del Bosque de las Luciérnagas
             </div>
             <div style={{ textAlign: 'center', fontSize: 13, color: '#6a4f28', marginBottom: 18 }}>
-              Tocá cada luz escondida en el bosque para completar el mapa
+              Arrastrá a tus amigos hasta cada luz escondida para completar el mapa
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
               {ZONAS.map((zona, zi) => {
