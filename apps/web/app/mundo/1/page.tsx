@@ -45,6 +45,56 @@ const FRASES: Record<string, Record<string, string>> = {
     en: 'A new friend arrived in the forest!',
     pt: 'Um novo amigo chegou à floresta!',
   },
+  zona0: {
+    es: 'Tocá el mapa dorado para ver todo el bosque.',
+    en: 'Tap the golden map to see the whole forest.',
+    pt: 'Toque no mapa dourado para ver toda a floresta.',
+  },
+  zona1: {
+    es: 'Tocá las lucesitas brillantes para juntarlas.',
+    en: 'Tap the glowing lights to collect them.',
+    pt: 'Toque nas lucinhas brilhantes para coletá-las.',
+  },
+  zona2: {
+    es: 'Tocá las puertas de las casitas de hongo.',
+    en: 'Tap the doors of the little mushroom houses.',
+    pt: 'Toque nas portas das casinhas de cogumelo.',
+  },
+  zona3: {
+    es: 'Cruzá el puente y tocá las luces del camino.',
+    en: 'Cross the bridge and tap the lights on the path.',
+    pt: 'Atravesse a ponte e toque nas luzes do caminho.',
+  },
+  zona4: {
+    es: 'Arrastrá a un amigo hasta el agua para que flote.',
+    en: 'Drag a friend into the water so they float.',
+    pt: 'Arraste um amigo até a água para que ele flutue.',
+  },
+  zona5: {
+    es: 'Tocá las gotitas brillantes en las hojas.',
+    en: 'Tap the sparkling dewdrops on the leaves.',
+    pt: 'Toque nas gotinhas brilhantes nas folhas.',
+  },
+  zona6: {
+    es: 'Tocá las nubes de luciérnagas de colores.',
+    en: 'Tap the colorful firefly clouds.',
+    pt: 'Toque nas nuvens coloridas de vaga-lumes.',
+  },
+  zona7: {
+    es: 'Tocá las rocas brillantes para descubrir algo.',
+    en: 'Tap the glowing rocks to discover something.',
+    pt: 'Toque nas pedras brilhantes para descobrir algo.',
+  },
+  zona8: {
+    es: 'Acercate a la entrada brillante de la cueva.',
+    en: 'Get close to the glowing cave entrance.',
+    pt: 'Aproxime-se da entrada brilhante da caverna.',
+  },
+  zona9: {
+    es: 'Juntá todas las luces del bosque para abrir el portal.',
+    en: 'Collect all the forest lights to open the portal.',
+    pt: 'Colete todas as luzes da floresta para abrir o portal.',
+  },
 };
 let mutedGlobal = false;
 let idiomaGlobal = IDIOMA_DETECTADO;
@@ -83,6 +133,8 @@ const ZONAS: Zona[] = [
 ];
 
 const TOTAL_HOTSPOTS = ZONAS.reduce((acc, z) => acc + z.hotspots.length, 0);
+
+const ICONO_ZONA = ['🗺️', '✨', '🚪', '🌉', '💧', '🔍', '🎈', '🪨', '💎', '🌙'];
 
 type ActiveBurst = { id: number; x: number; y: number; zonaIdx: number; tipo?: 'sparkle' | 'splash'; emoji?: string; };
 
@@ -137,13 +189,36 @@ export default function Mundo1() {
     return Math.round(el.scrollLeft / zw);
   }, []);
 
+  const zonasExplicadasRef = useRef<Set<number>>(new Set());
+  const [cartelZona, setCartelZona] = useState<number | null>(null);
+  const cartelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const mostrarCartelZona = useCallback((zi: number) => {
+    if (zonasExplicadasRef.current.has(zi)) return;
+    zonasExplicadasRef.current.add(zi);
+    setCartelZona(zi);
+    hablar(`zona${zi}`);
+    if (cartelTimeoutRef.current) clearTimeout(cartelTimeoutRef.current);
+    cartelTimeoutRef.current = setTimeout(() => setCartelZona(null), 4200);
+  }, []);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const onScroll = () => setZonaVisible(detectarZonaVisible());
+    let debounce: ReturnType<typeof setTimeout>;
+    const onScroll = () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        const nueva = detectarZonaVisible();
+        setZonaVisible(nueva);
+        mostrarCartelZona(nueva);
+      }, 350);
+    };
     el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [detectarZonaVisible]);
+    // Mostrar cartel de la Zona 0 apenas se carga el mundo
+    setTimeout(() => mostrarCartelZona(0), 3400);
+    return () => { el.removeEventListener('scroll', onScroll); clearTimeout(debounce); };
+  }, [detectarZonaVisible, mostrarCartelZona]);
 
   const convocarAmigo = useCallback((id: string) => {
     setAmigosEnJuego(prev => ({ ...prev, [id]: zonaVisible }));
@@ -701,6 +776,24 @@ export default function Mundo1() {
         }}>🌼</div>
       ))}
 
+      {/* Cartel de instruccion tipo Toca Boca, aparece al entrar a cada zona */}
+      {cartelZona !== null && (
+        <div style={{
+          position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)', zIndex: 90,
+          maxWidth: '86%', background: 'rgba(255,255,255,.97)', borderRadius: 20,
+          padding: '12px 18px', boxShadow: '0 10px 30px rgba(0,0,0,.35)',
+          display: 'flex', alignItems: 'center', gap: 12, animation: 'cartelIn .4s ease-out',
+        }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(160deg,#ffe9b0,#ffd27a)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0,
+          }}>{ICONO_ZONA[cartelZona] || '✨'}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#3a2a1a', lineHeight: 1.35 }}>
+            {FRASES[`zona${cartelZona}`]?.[idioma] || FRASES[`zona${cartelZona}`]?.es}
+          </div>
+        </div>
+      )}
+
       {/* Bandeja de amigos convocables */}
       <div style={{
         position: 'absolute', bottom: 44, left: 0, right: 0, zIndex: 60,
@@ -785,6 +878,7 @@ export default function Mundo1() {
         @keyframes zonaCelebra { 0%{ opacity: 0; } 25%{ opacity: 1; } 100%{ opacity: 0; } }
         @keyframes trailFade { 0%{ opacity: .9; transform: translate(-50%,-50%) scale(.6); } 40%{ opacity: .8; transform: translate(-50%,-50%) scale(1); } 100%{ opacity: 0; transform: translate(-50%,-50%) scale(.8) translateY(6px); } }
         @keyframes rockRumble { 0%,100%{ transform: translateX(0); } 20%{ transform: translateX(-4px) translateY(2px); } 40%{ transform: translateX(4px) translateY(-2px); } 60%{ transform: translateX(-3px); } 80%{ transform: translateX(3px); } }
+        @keyframes cartelIn { 0%{ opacity: 0; transform: translateX(-50%) translateY(-14px) scale(.9); } 100%{ opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
         @keyframes charBounce { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-6%); } }
         @keyframes floatWater { 0%,100%{ transform: translateY(0) rotate(-3deg); } 50%{ transform: translateY(-4%) rotate(3deg); } }
         @keyframes mapPulse { 0%,100%{ transform: translate(-50%,-50%) scale(1); } 50%{ transform: translate(-50%,-50%) scale(1.1); } }
