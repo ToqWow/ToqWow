@@ -32,7 +32,7 @@ const ZONAS: Zona[] = [
 
 const TOTAL_HOTSPOTS = ZONAS.reduce((acc, z) => acc + z.hotspots.length, 0);
 
-type ActiveBurst = { id: number; x: number; y: number; zonaIdx: number; tipo?: 'sparkle' | 'splash'; };
+type ActiveBurst = { id: number; x: number; y: number; zonaIdx: number; tipo?: 'sparkle' | 'splash'; emoji?: string; };
 
 export default function Mundo1() {
   const router = useRouter();
@@ -113,9 +113,37 @@ export default function Mundo1() {
     rafRef.current[key] = requestAnimationFrame(step);
   }, []);
 
-  // Zonas con region de reaccion especial (por ahora: Zona 5 "Arroyo Brillante", indice 4 = agua)
-  const chequearReaccion = useCallback((zi: number, key: string, e: React.PointerEvent) => {
-    if (zi !== 4) return;
+  // Puntos de reaccion tematica por zona (reutilizan coordenadas de los hotspots como anclas de objetos clave)
+  const PUNTOS_REACCION: Record<number, { x: number; y: number; tipo: string; emoji: string; sonido: () => void }[]> = {
+    1: [{ x: 1651, y: 691, tipo: 'corona', emoji: '✨', sonido: () => melody([659, 784, 988, 1175], 70, 0.3, 0.16) }],
+    2: [
+      { x: 826, y: 845, tipo: 'puerta', emoji: '🚪', sonido: () => { note(392, 0.1, 0.15); setTimeout(() => note(523, 0.15, 0.15), 90); } },
+      { x: 1376, y: 768, tipo: 'puerta', emoji: '🚪', sonido: () => { note(392, 0.1, 0.15); setTimeout(() => note(523, 0.15, 0.15), 90); } },
+      { x: 1926, y: 845, tipo: 'puerta', emoji: '🚪', sonido: () => { note(392, 0.1, 0.15); setTimeout(() => note(523, 0.15, 0.15), 90); } },
+      { x: 2339, y: 768, tipo: 'puerta', emoji: '🚪', sonido: () => { note(392, 0.1, 0.15); setTimeout(() => note(523, 0.15, 0.15), 90); } },
+    ],
+    3: [{ x: 1450, y: 1050, tipo: 'secreto', emoji: '🧚', sonido: () => melody([784, 988, 1175, 1568], 90, 0.3, 0.18) }],
+    5: [
+      { x: 963, y: 998, tipo: 'lupa', emoji: '🔍', sonido: () => note(880, 0.2, 0.15) },
+      { x: 1514, y: 922, tipo: 'lupa', emoji: '🔍', sonido: () => note(880, 0.2, 0.15) },
+      { x: 1926, y: 998, tipo: 'lupa', emoji: '🔍', sonido: () => note(880, 0.2, 0.15) },
+    ],
+    7: [
+      { x: 1101, y: 845, tipo: 'rumble', emoji: '💨', sonido: () => note(90, 0.3, 0.25, 'sawtooth') },
+      { x: 1651, y: 768, tipo: 'rumble', emoji: '💨', sonido: () => note(90, 0.3, 0.25, 'sawtooth') },
+      { x: 2064, y: 922, tipo: 'rumble', emoji: '💨', sonido: () => note(90, 0.3, 0.25, 'sawtooth') },
+    ],
+    8: [
+      { x: 1238, y: 845, tipo: 'eco', emoji: '💫', sonido: () => melody([523, 659, 784], 100, 0.35, 0.18) },
+      { x: 1789, y: 768, tipo: 'eco', emoji: '💫', sonido: () => melody([523, 659, 784], 100, 0.35, 0.18) },
+    ],
+  };
+  const RADIO_REACCION = 220; // px en coordenadas nativas de la zona (2752x1536)
+  const [rumbleZona, setRumbleZona] = useState<number | null>(null);
+
+  const chequearPuntosTematicos = useCallback((zi: number, e: React.PointerEvent) => {
+    const puntos = PUNTOS_REACCION[zi];
+    if (!puntos) return;
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     const container = target.closest('[data-zona-container]') as HTMLElement | null;
@@ -123,19 +151,52 @@ export default function Mundo1() {
     const contRect = container.getBoundingClientRect();
     const relX = (rect.left + rect.width / 2 - contRect.left) / contRect.width;
     const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
-    const enAgua = relY > 0.42;
-    const yaFlotando = !!floating[key];
-    setFloating(prev => ({ ...prev, [key]: enAgua }));
-    if (enAgua && !yaFlotando) {
-      const id = ++burstId.current;
-      setBursts(prev => [...prev, { id, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, zonaIdx: zi, tipo: 'splash' }]);
-      setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
-      melody([392, 330, 262], 110, 0.35, 0.2);
-      vib([15, 20, 15, 30]);
-    } else if (!enAgua && yaFlotando) {
-      note(440, 0.15, 0.15);
+    const nativeX = relX * ZONA_WIDTH;
+    const nativeY = relY * ZONA_HEIGHT;
+    for (const punto of puntos) {
+      const dist = Math.hypot(nativeX - punto.x, nativeY - punto.y);
+      if (dist < RADIO_REACCION) {
+        const id = ++burstId.current;
+        const px = contRect.left + (punto.x / ZONA_WIDTH) * contRect.width;
+        const py = contRect.top + (punto.y / ZONA_HEIGHT) * contRect.height;
+        setBursts(prev => [...prev, { id, x: px, y: py, zonaIdx: zi, tipo: 'sparkle', emoji: punto.emoji }]);
+        setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
+        punto.sonido();
+        vib(punto.tipo === 'rumble' ? [10, 30, 10] : 15);
+        if (punto.tipo === 'rumble') {
+          setRumbleZona(zi);
+          setTimeout(() => setRumbleZona(null), 350);
+        }
+        break;
+      }
     }
-  }, [floating]);
+  }, []);
+
+  // Zonas con region de reaccion especial (Zona 5 "Arroyo Brillante", indice 4 = agua)
+  const chequearReaccion = useCallback((zi: number, key: string, e: React.PointerEvent) => {
+    if (zi === 4) {
+      const target = e.currentTarget as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      const container = target.closest('[data-zona-container]') as HTMLElement | null;
+      if (!container) return;
+      const contRect = container.getBoundingClientRect();
+      const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
+      const enAgua = relY > 0.42;
+      const yaFlotando = !!floating[key];
+      setFloating(prev => ({ ...prev, [key]: enAgua }));
+      if (enAgua && !yaFlotando) {
+        const id = ++burstId.current;
+        setBursts(prev => [...prev, { id, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, zonaIdx: zi, tipo: 'splash' }]);
+        setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
+        melody([392, 330, 262], 110, 0.35, 0.2);
+        vib([15, 20, 15, 30]);
+      } else if (!enAgua && yaFlotando) {
+        note(440, 0.15, 0.15);
+      }
+      return;
+    }
+    chequearPuntosTematicos(zi, e);
+  }, [floating, chequearPuntosTematicos]);
 
   const endDrag = useCallback((zi: number) => (e: React.PointerEvent) => {
     const ds = dragState.current;
@@ -250,7 +311,7 @@ export default function Mundo1() {
         }}
       >
         {ZONAS.map((zona, zi) => (
-          <div key={zona.indice} data-zona-container style={{ position: 'relative', flex: `0 0 auto`, height: '100%', aspectRatio: `${ZONA_WIDTH} / ${ZONA_HEIGHT}` }}>
+          <div key={zona.indice} data-zona-container style={{ position: 'relative', flex: `0 0 auto`, height: '100%', aspectRatio: `${ZONA_WIDTH} / ${ZONA_HEIGHT}`, animation: rumbleZona === zi ? 'rockRumble .35s ease-in-out' : 'none' }}>
             <Image
               src={`/assets/mundo1/${zona.archivo}`}
               alt={zona.nombre}
@@ -409,7 +470,7 @@ export default function Mundo1() {
                 position: 'fixed', left: b.x, top: b.y, transform: 'translate(-50%,-50%)',
                 fontSize: b.tipo === 'splash' ? 44 : 34, pointerEvents: 'none', zIndex: 70,
                 animation: b.tipo === 'splash' ? 'splashRing .9s ease-out forwards' : 'burstUp .9s ease-out forwards',
-              }}>{b.tipo === 'splash' ? '💦' : '✨'}</div>
+              }}>{b.emoji || (b.tipo === 'splash' ? '💦' : '✨')}</div>
             ))}
           </div>
         ))}
@@ -481,6 +542,7 @@ export default function Mundo1() {
         @keyframes splashRing { 0%{ opacity: 1; transform: translate(-50%,-50%) scale(.3); } 60%{ opacity: 1; transform: translate(-50%,-50%) scale(1.4); } 100%{ opacity: 0; transform: translate(-50%,-50%) scale(1.9); } }
         @keyframes zonaCelebra { 0%{ opacity: 0; } 25%{ opacity: 1; } 100%{ opacity: 0; } }
         @keyframes trailFade { 0%{ opacity: .9; transform: translate(-50%,-50%) scale(.6); } 40%{ opacity: .8; transform: translate(-50%,-50%) scale(1); } 100%{ opacity: 0; transform: translate(-50%,-50%) scale(.8) translateY(6px); } }
+        @keyframes rockRumble { 0%,100%{ transform: translateX(0); } 20%{ transform: translateX(-4px) translateY(2px); } 40%{ transform: translateX(4px) translateY(-2px); } 60%{ transform: translateX(-3px); } 80%{ transform: translateX(3px); } }
         @keyframes charBounce { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-6%); } }
         @keyframes floatWater { 0%,100%{ transform: translateY(0) rotate(-3deg); } 50%{ transform: translateY(-4%) rotate(3deg); } }
         @keyframes mapPulse { 0%,100%{ transform: translate(-50%,-50%) scale(1); } 50%{ transform: translate(-50%,-50%) scale(1.1); } }
