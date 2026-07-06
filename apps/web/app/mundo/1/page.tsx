@@ -99,6 +99,18 @@ const FRASES: Record<string, Record<string, string>> = {
     ja: 'こんにちは！ぼくトクワオだよ。これは森のお友だちだよ。だれと遊ぶか選んでね。いつでも変えられるよ。',
     ko: '안녕! 나는 토크와우야. 얘들은 숲속 친구들이야. 누구랑 놀지 골라봐. 언제든지 바꿀 수 있어.',
   },
+  elegirParaJugar: {
+    es: '¡Ahora tocá a uno para jugar!',
+    en: 'Now tap one to play!',
+    pt: 'Agora toque em um para jogar!',
+    hi: 'अब खेलने के लिए किसी एक को छुओ!',
+    id: 'Sekarang sentuh salah satu untuk main!',
+    ru: 'А теперь нажми на одного, чтобы играть!',
+    vi: 'Bây giờ hãy chạm vào một bạn để chơi!',
+    zh: '现在点一个开始玩吧！',
+    ja: 'さあ、遊ぶ子をタップしてね！',
+    ko: '이제 놀 친구를 하나 눌러봐!',
+  },
   zona0: {
     es: 'Tocá el mapa dorado para ver todo el bosque.',
     en: 'Tap the golden map to see the whole forest.',
@@ -685,19 +697,29 @@ export default function Mundo1() {
         melody([523, 659, 784], 80, 0.3, 0.18);
         vib(15);
         hablarTexto(FRASES.presentacionIntro[idiomaGlobal] || FRASES.presentacionIntro.es);
-      }, 500);
-      const t1 = setTimeout(() => setPresentacionIdx(1), 3600);
+      }, 600);
+      const t1 = setTimeout(() => setPresentacionIdx(1), 4800);
       return () => { clearTimeout(t0); clearTimeout(t1); };
     }
     const i = presentacionIdx - 1;
-    if (i >= TODOS_PERSONAJES.length) return;
-    const t = setTimeout(() => {
-      note(880, 0.15, 0.15);
-      vib(10);
-      hablarTexto(TODOS_PERSONAJES[i].nombre);
-    }, 150);
-    const t2 = setTimeout(() => setPresentacionIdx(p => p + 1), 1150);
-    return () => { clearTimeout(t); clearTimeout(t2); };
+    if (i < TODOS_PERSONAJES.length) {
+      const t = setTimeout(() => {
+        note(880, 0.15, 0.15);
+        vib(10);
+        hablarTexto(TODOS_PERSONAJES[i].nombre);
+      }, 350);
+      const t2 = setTimeout(() => setPresentacionIdx(p => p + 1), 2100);
+      return () => { clearTimeout(t); clearTimeout(t2); };
+    }
+    if (i === TODOS_PERSONAJES.length) {
+      // Ya se nombraron los 10 — ahora se indica que elija uno para jugar
+      const t3 = setTimeout(() => {
+        melody([659, 784, 988], 90, 0.3, 0.2);
+        vib([15, 15, 30]);
+        hablarTexto(FRASES.elegirParaJugar[idiomaGlobal] || FRASES.elegirParaJugar.es);
+      }, 500);
+      return () => clearTimeout(t3);
+    }
   }, [mostrarPresentacion, presentacionIdx]);
 
   const cerrarPresentacion = useCallback((idElegido?: string) => {
@@ -1240,7 +1262,8 @@ export default function Mundo1() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, maxWidth: 460 }}>
             {TODOS_PERSONAJES.map((p, i) => {
               const enFoco = presentacionIdx - 1 === i;
-              const yaMostrado = presentacionIdx - 1 > i || presentacionIdx > TODOS_PERSONAJES.length;
+              const listoParaElegir = presentacionIdx > TODOS_PERSONAJES.length;
+              const yaMostrado = presentacionIdx - 1 > i || listoParaElegir;
               return (
                 <button
                   key={p.id}
@@ -1252,12 +1275,14 @@ export default function Mundo1() {
                     opacity: presentacionIdx === 0 ? 0.5 : (enFoco || yaMostrado ? 1 : 0.4),
                     transform: enFoco ? 'scale(1.18)' : 'scale(1)',
                     transition: 'transform .3s ease, opacity .3s ease',
+                    animation: listoParaElegir ? 'charBounce 1.6s ease-in-out infinite' : 'none',
+                    animationDelay: listoParaElegir ? `${i * 0.08}s` : '0s',
                   }}
                 >
                   <div style={{
                     width: 56, height: 56, borderRadius: '50%', padding: 4,
-                    border: enFoco ? '3px solid rgba(255,220,150,1)' : '2px solid rgba(255,255,255,.3)',
-                    boxShadow: enFoco ? '0 0 16px rgba(255,220,150,.9)' : 'none',
+                    border: enFoco || listoParaElegir ? '3px solid rgba(255,220,150,1)' : '2px solid rgba(255,255,255,.3)',
+                    boxShadow: enFoco || listoParaElegir ? '0 0 16px rgba(255,220,150,.9)' : 'none',
                   }}>
                     <img src={`/assets/mundo1/${p.src}`} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   </div>
