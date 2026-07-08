@@ -1121,7 +1121,7 @@ export default function Mundo1() {
               const anfitrion2Id = personajeActivo === 'coti' ? 'puli' : 'coti';
               return (
                 <>
-                  <div style={{ position: 'absolute', left: '38%', top: '58%', width: '9%', zIndex: 18, transform: `translate(${dragPos[`${anfitrion1Id}-${zi}`]?.x || 0}px, ${dragPos[`${anfitrion1Id}-${zi}`]?.y || 0}px)` }}>
+                  <div style={{ position: 'absolute', left: '29%', top: '48%', width: '18%', zIndex: 18, transform: `translate(${dragPos[`${anfitrion1Id}-${zi}`]?.x || 0}px, ${dragPos[`${anfitrion1Id}-${zi}`]?.y || 0}px)` }}>
                     <div style={{ animation: dragState.current?.key === `${anfitrion1Id}-${zi}` ? 'none' : 'charBounce 2.4s ease-in-out infinite' }}>
                       <img
                         src={`/assets/mundo1/${anfitrion1?.src}`} alt={anfitrion1?.nombre}
@@ -1134,7 +1134,7 @@ export default function Mundo1() {
                         }} />
                     </div>
                   </div>
-                  <div style={{ position: 'absolute', left: '47%', top: '60%', width: '8.5%', zIndex: 17, transform: `translate(${dragPos[`${anfitrion2Id}-${zi}`]?.x || 0}px, ${dragPos[`${anfitrion2Id}-${zi}`]?.y || 0}px)` }}>
+                  <div style={{ position: 'absolute', left: '47%', top: '50%', width: '17%', zIndex: 17, transform: `translate(${dragPos[`${anfitrion2Id}-${zi}`]?.x || 0}px, ${dragPos[`${anfitrion2Id}-${zi}`]?.y || 0}px)` }}>
                     <div style={{ animation: dragState.current?.key === `${anfitrion2Id}-${zi}` ? 'none' : 'charBounce 2.6s ease-in-out infinite .3s' }}>
                       <img
                         src={`/assets/mundo1/${anfitrion2?.src}`} alt={anfitrion2?.nombre}
@@ -1201,7 +1201,7 @@ export default function Mundo1() {
                 En la Arboleda los anfitriones fijos rotan automaticamente si coinciden con el
                 personaje elegido, asi que aca no hace falta ninguna exclusion especial. */}
             {zi === zonaCompanero && (
-              <div style={{ position: 'absolute', left: '8%', bottom: '6%', width: '11%', zIndex: 19, transform: `translate(${dragPos[`${personajeActivo}-${zi}`]?.x || 0}px, ${dragPos[`${personajeActivo}-${zi}`]?.y || 0}px)` }}>
+              <div style={{ position: 'absolute', left: '6%', bottom: '6%', width: '22%', zIndex: 19, transform: `translate(${dragPos[`${personajeActivo}-${zi}`]?.x || 0}px, ${dragPos[`${personajeActivo}-${zi}`]?.y || 0}px)` }}>
                 <div style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center',
                   filter: companionPulseZona === zi ? 'drop-shadow(0 0 18px rgba(255,220,150,.95))' : 'none',
@@ -1240,7 +1240,7 @@ export default function Mundo1() {
               const key = `${amigo.id}-${zi}`;
               return (
                 <div key={amigo.id} style={{
-                  position: 'absolute', left: `${20 + ai * 10}%`, bottom: '8%', width: '10%', zIndex: 16,
+                  position: 'absolute', left: `${15 + ai * 22}%`, bottom: '8%', width: '20%', zIndex: 16,
                   transform: `translate(${dragPos[key]?.x || 0}px, ${dragPos[key]?.y || 0}px)`,
                 }}>
                   <div style={{ animation: dragState.current?.key === key ? 'none' : 'charBounce 2.3s ease-in-out infinite' }}>
