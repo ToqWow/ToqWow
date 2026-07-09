@@ -1,709 +1,1457 @@
 'use client';
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { detectarIdiomaInicial, guardarIdioma, IDIOMAS_UI } from '@/lib/idioma';
 
-/* ══ AUDIO ENGINE ══ */
 let AC: AudioContext | null = null;
 const ac = (): AudioContext => { if (!AC) AC = new ((window as any).AudioContext || (window as any).webkitAudioContext)(); return AC!; };
 const note = (f: number, d = 0.3, v = 0.2, t: OscillatorType = 'sine') => {
   try { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.connect(g); g.connect(c.destination); o.type = t; o.frequency.value = f; g.gain.setValueAtTime(v, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + d); o.start(); o.stop(c.currentTime + d); } catch {}
 };
-const melody = (fs: number[], gap = 90, d = 0.32, v = 0.18) => fs.forEach((f,i) => setTimeout(() => note(f,d,v), i*gap));
+const melody = (fs: number[], gap = 100, d = 0.35, v = 0.18) => fs.forEach((f, i) => setTimeout(() => note(f, d, v), i * gap));
 const vib = (p: number | number[]) => { try { (navigator as any).vibrate?.(p); } catch {} };
-const r  = (a: number, b: number) => a + Math.random()*(b-a);
-const ri = (a: number, b: number) => Math.floor(r(a,b));
-let uid = 1000;
 
-/* ══ TYPES ══ */
-type Need  = 'hunger'|'sleep'|'fun'|'bath'|'love';
-type Mood  = 'happy'|'neutral'|'excited'|'sleepy'|'sad';
-
-interface Citizen {
-  id:number; name:string; emoji?:string; img?:string; color:string; isMascot?:boolean;
-  x:number; y:number; zIndex:number; // x/y en % DE LA IMAGEN, no del viewport
-  needs:Record<Need,number>; mood:Mood;
-  bubble:string; bubbleTimer:number;
-  hair:number; suit:number; acc:number;
-  dragging:boolean; scale:number;
-}
-interface BuildingItem {
-  id:number; emoji:string; label:string;
-  x:number; y:number; sz:number; color:string;
-  zIndex:number; dragging:boolean; scale:number;
-  action:Need; zoneHint:string; // qué zona da el bonus de feedback
-}
-type Sticker  = {id:number; emoji:string; x:number; y:number; sz:number; rotation:number;};
-type Particle = {id:number; x:number; y:number; e:string;};
-
-/* ══ PERSONAJES DE PLANETA TIQUI (sin relación a ninguna franquicia) ══
-   Nota honesta: los emojis no tienen variantes de color de ojos (no existe
-   en el estándar Unicode), así que esa parte de la descripción de cada
-   personaje no se puede representar con precisión acá. Sí se puede
-   aproximar el tono de piel. Para que Tizi/Coti/Zoe/Tito/Luta se vean
-   realmente como se describieron (ojos y pelo exactos), lo ideal es
-   generarles arte propio con OpenArt, igual que a ToqWow. */
-const CITIZENS_DEF = [
-  {name:'Tizi',   emoji:'👧🏽', color:'#FF6B9D'},
-  {name:'Coti',   emoji:'👧🏻', color:'#4FC3F7'},
-  {name:'Zoe',    emoji:'👧🏻', color:'#C77DFF'},
-  {name:'Tito',   emoji:'👦🏻', color:'#7CFC00'},
-  {name:'Luta',   emoji:'👦🏾', color:'#4D96FF'},
-  {name:'Copo de Nieve', emoji:'🐶', color:'#DEB887'},
-  {name:'ToqWow', img:'/toqwow-character-full.png', color:'#B8A9FF', isMascot:true},
-];
-const HAIR_OPTS  = ['👱','🧑‍🦱','👩‍🦰','🧑‍🦲','👩‍🦳','🧑','👱‍♀️','🧑‍🦱'];
-/* Ropa: remeras simples + uniformes de oficios + disfraces — pensado para
-   que el chico arme "quiero ser bombero", "quiero ser sirena", etc. */
-const SUIT_OPTS  = [
-  '👕','👔','👗','🧥','🎽','🦺','👘','🥋','🩱','🥻',       // ropa básica
-  '🧑‍⚕️','🧑‍🚀','🧑‍🍳','🧑‍🚒','🧑‍🌾','🧑‍🔬','🧑‍✈️','🧑‍🎨','👮','🥼', // oficios
-  '🦸','🧙','🧚','🧜‍♀️','🥷','👸','🤴','🕵️',              // disfraces
-];
-/* Sombreros/gorros/vinchas + cositas "wow" (orejitas, cuernos, antenas
-   al estilo ToqWow) — todo elegible sin necesitar leer una palabra. */
-const ACC_OPTS   = [
-  '🎩','👑','🧢','🎓','🪖','⛑️','👒',       // sombreros/cascos
-  '🎀','🌸','⭐','💫','🌈','🍀','🎗️','🧣',   // vinchas/moños
-  '🐰','🐻','🦄','👽','🎭','🕶️','🌙','🦋',   // orejitas y cosas geniales
-];
-
-const NEED_ICONS:  Record<Need,string> = {hunger:'🍕',sleep:'💤',fun:'🎮',bath:'🛁',love:'💖'};
-const NEED_LABEL:  Record<Need,string> = {hunger:'Hambre',sleep:'Sueño',fun:'Diversión',bath:'Baño',love:'Amor'};
-const NEED_SND:    Record<Need,()=>void> = {
-  hunger: ()=>melody([523,659,784,1047]),
-  sleep:  ()=>melody([392,330,262]),
-  fun:    ()=>melody([523,659,784,880,1047]),
-  bath:   ()=>melody([400,500,600,800]),
-  love:   ()=>melody([659,784,880,1047,880,784]),
+// ---- Sistema de voz guiada, adaptado al idioma del dispositivo ----
+const IDIOMA_DETECTADO: string = typeof window !== 'undefined' ? detectarIdiomaInicial() : 'es';
+const LOCALE_VOZ: Record<string, string> = { es: 'es-419', en: 'en-US', pt: 'pt-BR', hi: 'hi-IN', id: 'id-ID', ru: 'ru-RU', vi: 'vi-VN', zh: 'zh-CN', ja: 'ja-JP', ko: 'ko-KR' };
+const FRASES: Record<string, Record<string, string>> = {
+  bienvenida: {
+    es: '¡Hola! Soy Toqwow. Este es mi planeta. Arrastrame para explorarlo conmigo.',
+    en: "Hi! I'm Toqwow. This is my planet. Drag me to explore it with me.",
+    pt: 'Oi! Eu sou o Toqwow. Este é o meu planeta. Me arraste para explorá-lo comigo.',
+    hi: 'नमस्ते! मैं टॉकवाओ हूँ। यह मेरा ग्रह है। मुझे इसे साथ में घूमने के लिए खींचो।',
+    id: 'Hai! Aku Toqwow. Ini planetku. Seret aku untuk menjelajahinya bersama.',
+    ru: 'Привет! Я Токвау. Это моя планета. Тяни меня, чтобы исследовать её вместе.',
+    vi: 'Xin chào! Mình là Toqwow. Đây là hành tinh của mình. Hãy kéo mình đi khám phá nó nhé.',
+    zh: '你好！我是Toqwow。这是我的星球。拖着我一起去探索吧。',
+    ja: 'こんにちは！ぼくトクワオだよ。ここはぼくの星だよ。いっしょに探検しよう。',
+    ko: '안녕! 나는 토크와우야. 여기는 내 행성이야. 나를 끌어서 같이 탐험해줘.',
+  },
+  mapa: {
+    es: 'Este es el mapa de mi planeta. Tocá una zona para ir ahí.',
+    en: 'This is the map of my planet. Tap a zone to go there.',
+    pt: 'Este é o mapa do meu planeta. Toque em uma área para ir até lá.',
+    hi: 'यह मेरे ग्रह का नक्शा है। किसी जगह पर टैप करके वहाँ जाओ।',
+    id: 'Ini peta planetku. Sentuh salah satu area untuk pergi ke sana.',
+    ru: 'Это карта моей планеты. Нажми на зону, чтобы туда перейти.',
+    vi: 'Đây là bản đồ hành tinh của mình. Chạm vào một khu vực để đến đó.',
+    zh: '这是我星球的地图。点一个区域就能去那里。',
+    ja: 'これはぼくの星の地図だよ。行きたい場所をタップしてね。',
+    ko: '이건 내 행성 지도야. 가고 싶은 곳을 톡 눌러봐.',
+  },
+  zonaCompleta: {
+    es: '¡Muy bien! Encontraste todas las luces de esta zona.',
+    en: 'Great job! You found all the lights in this zone.',
+    pt: 'Muito bem! Você encontrou todas as luzes desta área.',
+    hi: 'शाबाश! तुमने इस जगह की सारी रोशनी ढूंढ ली।',
+    id: 'Hebat! Kamu menemukan semua cahaya di area ini.',
+    ru: 'Отлично! Ты нашёл все огоньки в этой зоне.',
+    vi: 'Giỏi lắm! Bạn đã tìm thấy hết ánh sáng ở khu này.',
+    zh: '太棒了！你找到了这个区域的所有亮光。',
+    ja: 'すごい！このエリアの光を全部見つけたね。',
+    ko: '잘했어! 이 구역의 불빛을 다 찾았어.',
+  },
+  portalNoListo: {
+    es: 'Todavía faltan luces por encontrar en el planeta.',
+    en: 'There are still more lights to find on the planet.',
+    pt: 'Ainda faltam luzes para encontrar no planeta.',
+    hi: 'ग्रह में अभी और रोशनियाँ ढूंढनी बाकी हैं।',
+    id: 'Masih ada cahaya yang belum ditemukan di planet ini.',
+    ru: 'На планете ещё остались огоньки, которые нужно найти.',
+    vi: 'Hành tinh vẫn còn ánh sáng chưa được tìm thấy.',
+    zh: '星球上还有亮光没有找到。',
+    ja: '星にはまだ見つけていない光があるよ。',
+    ko: '행성에는 아직 찾지 못한 불빛이 있어.',
+  },
+  portalListo: {
+    es: '¡Lo lograste! Tocá el cristal para viajar al siguiente mundo.',
+    en: 'You did it! Tap the crystal to travel to the next world.',
+    pt: 'Você conseguiu! Toque no cristal para viajar para o próximo mundo.',
+    hi: 'तुमने कर दिखाया! अगली दुनिया में जाने के लिए क्रिस्टल को छुओ।',
+    id: 'Kamu berhasil! Sentuh kristal untuk pergi ke dunia berikutnya.',
+    ru: 'У тебя получилось! Нажми на кристалл, чтобы отправиться в следующий мир.',
+    vi: 'Bạn đã làm được! Chạm vào pha lê để đến thế giới tiếp theo.',
+    zh: '你做到了！点一下水晶前往下一个世界。',
+    ja: 'やったね！クリスタルをタップして次の世界へ行こう。',
+    ko: '해냈구나! 크리스탈을 눌러서 다음 세계로 가봐.',
+  },
+  nuevoAmigo: {
+    es: '¡Un nuevo amigo llegó a jugar!',
+    en: 'A new friend arrived to play!',
+    pt: 'Um novo amigo chegou para brincar!',
+    hi: 'खेलने के लिए एक नया दोस्त आया!',
+    id: 'Teman baru datang untuk bermain!',
+    ru: 'Пришёл новый друг поиграть!',
+    vi: 'Một người bạn mới đã đến chơi!',
+    zh: '来了一个新朋友一起玩！',
+    ja: '新しいお友だちが遊びに来たよ！',
+    ko: '새로운 친구가 놀러 왔어!',
+  },
+  presentacionIntro: {
+    es: '¡Hola! Soy Toqwow y este es mi planeta. Estos son mis amigos. Elegí con quién querés jugar. Podés cambiar cuando quieras.',
+    en: "Hi! I'm Toqwow and this is my planet. These are my friends. Pick who you want to play with. You can change anytime.",
+    pt: 'Oi! Eu sou o Toqwow e este é o meu planeta. Estes são meus amigos. Escolha com quem você quer brincar. Você pode trocar quando quiser.',
+    hi: 'नमस्ते! मैं टॉकवाओ हूँ और यह मेरा ग्रह है। ये मेरे दोस्त हैं। चुनो किसके साथ खेलना है। तुम कभी भी बदल सकते हो।',
+    id: 'Hai! Aku Toqwow dan ini planetku. Ini teman-temanku. Pilih siapa yang mau kamu ajak main. Kamu bisa ganti kapan saja.',
+    ru: 'Привет! Я Токвау, и это моя планета. Это мои друзья. Выбери, с кем хочешь играть. Ты можешь поменять в любой момент.',
+    vi: 'Xin chào! Mình là Toqwow và đây là hành tinh của mình. Đây là những người bạn của mình. Hãy chọn ai bạn muốn chơi cùng. Bạn có thể đổi bất cứ lúc nào.',
+    zh: '你好！我是Toqwow，这是我的星球。这些是我的朋友。选一个你想一起玩的。你随时都可以换。',
+    ja: 'こんにちは！ぼくトクワオだよ、ここはぼくの星なんだ。これはぼくのお友だちだよ。だれと遊ぶか選んでね。いつでも変えられるよ。',
+    ko: '안녕! 나는 토크와우고 여기는 내 행성이야. 얘들은 내 친구들이야. 누구랑 놀지 골라봐. 언제든지 바꿀 수 있어.',
+  },
+  elegirParaJugar: {
+    es: '¡Ahora tocá a uno para jugar!',
+    en: 'Now tap one to play!',
+    pt: 'Agora toque em um para jogar!',
+    hi: 'अब खेलने के लिए किसी एक को छुओ!',
+    id: 'Sekarang sentuh salah satu untuk main!',
+    ru: 'А теперь нажми на одного, чтобы играть!',
+    vi: 'Bây giờ hãy chạm vào một bạn để chơi!',
+    zh: '现在点一个开始玩吧！',
+    ja: 'さあ、遊ぶ子をタップしてね！',
+    ko: '이제 놀 친구를 하나 눌러봐!',
+  },
+  zona0: {
+    es: 'Tocá el mapa dorado para ver todo mi planeta.',
+    en: 'Tap the golden map to see my whole planet.',
+    pt: 'Toque no mapa dourado para ver todo o meu planeta.',
+    hi: 'मेरा पूरा ग्रह देखने के लिए सुनहरे नक्शे को छुओ।',
+    id: 'Sentuh peta emas untuk melihat seluruh planetku.',
+    ru: 'Нажми на золотую карту, чтобы увидеть всю мою планету.',
+    vi: 'Chạm vào bản đồ vàng để xem toàn bộ hành tinh của mình.',
+    zh: '点一下金色的地图，看看我整个星球。',
+    ja: '金色の地図をタップしてぼくの星全体を見てみよう。',
+    ko: '황금 지도를 눌러서 내 행성 전체를 봐봐.',
+  },
+  zona1: {
+    es: 'Tocá las burbujas de colores para reventarlas.',
+    en: 'Tap the colorful bubbles to pop them.',
+    pt: 'Toque nas bolhas coloridas para estourá-las.',
+    hi: 'रंगीन बुलबुलों को छुओ और फोड़ो।',
+    id: 'Sentuh gelembung warna-warni untuk memecahkannya.',
+    ru: 'Нажимай на разноцветные пузыри, чтобы лопнуть их.',
+    vi: 'Chạm vào những bong bóng đầy màu sắc để làm vỡ chúng.',
+    zh: '点一下彩色泡泡把它们戳破。',
+    ja: 'カラフルなあわをタップしてはじけさせよう。',
+    ko: '알록달록한 방울을 눌러서 터뜨려봐.',
+  },
+  zona2: {
+    es: 'Arrastrá a tu personaje cerca de las piedritas brillantes para hacerlas rebotar.',
+    en: 'Drag your character close to the shiny pebbles to make them bounce.',
+    pt: 'Arraste seu personagem perto das pedrinhas brilhantes para fazê-las saltar.',
+    hi: 'चमकती कंकड़ों के पास अपने किरदार को खींचो ताकि वे उछलें।',
+    id: 'Seret karaktermu dekat kerikil berkilau supaya memantul.',
+    ru: 'Перетащи своего персонажа поближе к блестящим камешкам, чтобы они подпрыгнули.',
+    vi: 'Kéo nhân vật của bạn đến gần những viên sỏi lấp lánh để chúng nảy lên.',
+    zh: '把你的角色拖到闪亮的小石头附近，让它们弹起来。',
+    ja: 'キャラクターをキラキラした小石の近くまで引っぱってはねさせよう。',
+    ko: '네 캐릭터를 반짝이는 조약돌 가까이 끌어서 튕기게 해봐.',
+  },
+  zona3: {
+    es: 'Arrastrá a tu personaje cerca de las antenitas dormidas para encenderlas.',
+    en: 'Drag your character close to the sleepy antennas to light them up.',
+    pt: 'Arraste seu personagem perto das anteninhas adormecidas para acendê-las.',
+    hi: 'सोई हुई एंटेनाओं के पास अपने किरदार को खींचो ताकि वे जल उठें।',
+    id: 'Seret karaktermu dekat antena yang tertidur untuk menyalakannya.',
+    ru: 'Перетащи своего персонажа поближе к спящим антеннам, чтобы зажечь их.',
+    vi: 'Kéo nhân vật của bạn đến gần những chiếc ăng-ten đang ngủ để thắp sáng chúng.',
+    zh: '把你的角色拖到沉睡的小天线附近，把它们点亮。',
+    ja: 'キャラクターを眠っているアンテナの近くまで引っぱって光らせよう。',
+    ko: '잠자는 안테나 가까이 네 캐릭터를 끌어서 불을 켜봐.',
+  },
+  zona4: {
+    es: 'Arrastrá a tu personaje hasta el agua para que flote.',
+    en: 'Drag your character into the water so they float.',
+    pt: 'Arraste seu personagem até a água para que ele flutue.',
+    hi: 'अपने किरदार को पानी तक खींचो ताकि वह तैरे।',
+    id: 'Seret karaktermu ke air supaya dia mengapung.',
+    ru: 'Перетащи своего персонажа в воду, чтобы он поплыл.',
+    vi: 'Kéo nhân vật của bạn xuống nước để bạn ấy nổi lên.',
+    zh: '把你的角色拖到水里，让他漂起来。',
+    ja: 'キャラクターを水の中まで引っぱって浮かせよう。',
+    ko: '네 캐릭터를 물 속으로 끌어서 떠다니게 해봐.',
+  },
+  zona5: {
+    es: 'Arrastrá a tu personaje cerca de los cristales para escuchar su canto.',
+    en: 'Drag your character close to the crystals to hear them sing.',
+    pt: 'Arraste seu personagem perto dos cristais para ouvir o canto deles.',
+    hi: 'क्रिस्टलों के पास अपने किरदार को खींचो और उनका गाना सुनो।',
+    id: 'Seret karaktermu dekat kristal untuk mendengar nyanyiannya.',
+    ru: 'Перетащи своего персонажа поближе к кристаллам, чтобы услышать их пение.',
+    vi: 'Kéo nhân vật của bạn đến gần những viên pha lê để nghe chúng hát.',
+    zh: '把你的角色拖到水晶附近，听听它们的歌声。',
+    ja: 'キャラクターをクリスタルの近くまで引っぱって歌声を聞いてみよう。',
+    ko: '크리스탈 가까이 네 캐릭터를 끌어서 노래를 들어봐.',
+  },
+  zona6: {
+    es: 'Arrastrá a tu personaje por el sendero dorado para descubrir algo.',
+    en: 'Drag your character along the golden path to discover something.',
+    pt: 'Arraste seu personagem pelo caminho dourado para descobrir algo.',
+    hi: 'सुनहरे रास्ते पर अपने किरदार को खींचो और कुछ खोजो।',
+    id: 'Seret karaktermu di sepanjang jalan emas untuk menemukan sesuatu.',
+    ru: 'Перетащи своего персонажа по золотой тропе, чтобы что-то найти.',
+    vi: 'Kéo nhân vật của bạn dọc theo con đường vàng để khám phá điều gì đó.',
+    zh: '把你的角色拖到金色小路上，发现点什么。',
+    ja: 'キャラクターを金色の道まで引っぱって何か見つけよう。',
+    ko: '황금빛 길을 따라 네 캐릭터를 끌어서 뭔가 발견해봐.',
+  },
+  zona7: {
+    es: 'Arrastrá a tu personaje cerca del círculo de luz para saludar a la visita.',
+    en: 'Drag your character close to the circle of light to greet the visitor.',
+    pt: 'Arraste seu personagem perto do círculo de luz para cumprimentar a visita.',
+    hi: 'रोशनी के गोले के पास अपने किरदार को खींचो और मेहमान को नमस्ते कहो।',
+    id: 'Seret karaktermu dekat lingkaran cahaya untuk menyapa tamu itu.',
+    ru: 'Перетащи своего персонажа поближе к светящемуся кругу, чтобы поприветствовать гостя.',
+    vi: 'Kéo nhân vật của bạn đến gần vòng tròn ánh sáng để chào vị khách.',
+    zh: '把你的角色拖到光环附近，跟来的客人打招呼。',
+    ja: 'キャラクターを光の輪の近くまで引っぱってお客さんにあいさつしよう。',
+    ko: '빛의 원 가까이 네 캐릭터를 끌어서 손님에게 인사해봐.',
+  },
+  zona8: {
+    es: 'Arrastrá a tu personaje cerca de las cúpulas para conocer a los ayudantes.',
+    en: 'Drag your character close to the domes to meet the little helpers.',
+    pt: 'Arraste seu personagem perto das cúpulas para conhecer os ajudantes.',
+    hi: 'गुंबदों के पास अपने किरदार को खींचो और छोटे मददगारों से मिलो।',
+    id: 'Seret karaktermu dekat kubah untuk bertemu para penolong kecil.',
+    ru: 'Перетащи своего персонажа поближе к куполам, чтобы познакомиться с маленькими помощниками.',
+    vi: 'Kéo nhân vật của bạn đến gần những mái vòm để gặp các bạn trợ giúp nhỏ.',
+    zh: '把你的角色拖到圆顶附近，认识一下小帮手们。',
+    ja: 'キャラクターをドームの近くまで引っぱって小さな助っ人に会おう。',
+    ko: '돔 가까이 네 캐릭터를 끌어서 꼬마 도우미들을 만나봐.',
+  },
+  zona9: {
+    es: 'Juntá todas las luces del planeta para abrir el portal.',
+    en: 'Collect all the lights on the planet to open the portal.',
+    pt: 'Colete todas as luzes do planeta para abrir o portal.',
+    hi: 'द्वार खोलने के लिए ग्रह की सारी रोशनियाँ इकट्ठा करो।',
+    id: 'Kumpulkan semua cahaya di planet ini untuk membuka portal.',
+    ru: 'Собери все огоньки на планете, чтобы открыть портал.',
+    vi: 'Thu thập hết ánh sáng trên hành tinh để mở cổng.',
+    zh: '收集星球上所有的亮光，打开传送门。',
+    ja: '星の光を全部集めてポータルを開けよう。',
+    ko: '행성의 불빛을 모두 모아서 포털을 열어봐.',
+  },
 };
-const MOOD_BUBBLE: Record<Mood,string> = {
-  happy:'😊 ¡Feliz!', neutral:'😐 Hmm...', excited:'🤩 ¡Genial!',
-  sleepy:'😴 Sueño...', sad:'😢 Necesito algo',
+
+let mutedGlobal = false;
+let idiomaGlobal = IDIOMA_DETECTADO;
+const hablar = (clave: string) => {
+  if (mutedGlobal) return;
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const dict = FRASES[clave];
+  if (!dict) return;
+  const texto = dict[idiomaGlobal] || dict['es'];
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = LOCALE_VOZ[idiomaGlobal] || 'es-419';
+    u.rate = 0.95; u.pitch = 1.2; u.volume = 1;
+    window.speechSynthesis.speak(u);
+  } catch {}
 };
-const GREET_SND = ()=>melody([784,988,1175],70,0.22,0.16);
-const GREET_BUBBLES = ['👋😊','😄✨','🥰','😊💫'];
-function calcMood(n: Record<Need,number>): Mood {
-  const avg = Object.values(n).reduce((a,b)=>a+b,0)/5;
-  if (n.sleep<20) return 'sleepy';
-  if (avg>80) return 'happy';
-  if (avg>65) return 'excited';
-  if (avg<28) return 'sad';
-  return 'neutral';
-}
+const hablarTexto = (texto: string, onEnd?: () => void) => {
+  if (mutedGlobal) return;
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) { if (onEnd) setTimeout(onEnd, 1200); return; }
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = LOCALE_VOZ[idiomaGlobal] || 'es-419';
+    u.rate = 0.95; u.pitch = 1.2; u.volume = 1;
+    if (onEnd) {
+      let terminado = false;
+      const finalizar = () => { if (terminado) return; terminado = true; onEnd(); };
+      u.onend = finalizar;
+      u.onerror = finalizar;
+      // Respaldo por si el navegador nunca dispara onend/onerror (pasa en algunos Android)
+      setTimeout(finalizar, Math.max(1800, texto.length * 90));
+    }
+    window.speechSynthesis.speak(u);
+  } catch { if (onEnd) setTimeout(onEnd, 1200); }
+};
 
-/* ══ ZONAS DE PLANETA TIQUI ══
-   Coordenadas en % DE LA IMAGEN (planeta-tiqui-bg.jpg, 2544×1456), no del
-   viewport — son aproximadas a ojo sobre el arte generado. Activá el botón
-   🔧 (debug) en el juego para ver los rectángulos dibujados encima de la
-   imagen real y ajustar estos números a mano si no calzan perfecto. */
-interface Zone { id:string; name:string; x:number; y:number; w:number; h:number; needs:Need[]; }
-const ZONES: Zone[] = [
-  { id:'cloud-house',    name:'Casa Nube',            x:19, y:22, w:16, h:21, needs:['sleep','love'] },
-  { id:'garden',         name:'Jardín Estelar',       x:34, y:17, w:17, h:19, needs:['love','fun'] },
-  { id:'kitchen',        name:'Cocina de Estrellas',  x:52, y:15, w:13, h:23, needs:['hunger'] },
-  { id:'snack-stand',    name:'Puesto de Meriendas',  x:66, y:27, w:15, h:18, needs:['hunger'] },
-  { id:'pool',           name:'Pileta Burbujeante',   x:42, y:38, w:20, h:22, needs:['bath'] },
-  { id:'candy-counter',  name:'Mostrador de Golosinas', x:67, y:50, w:18, h:19, needs:['hunger','fun'] },
-  { id:'music-stage',    name:'Escenario Brillante',  x:52, y:59, w:20, h:25, needs:['fun'] },
-  { id:'rocket-garage',  name:'Garaje del Cohete',    x:27, y:57, w:18, h:24, needs:['fun'] },
-  { id:'hammock',        name:'Rincón Hamaca',        x:15, y:47, w:13, h:18, needs:['sleep'] },
+const PROGRESO_TXT = {
+  faltanZona: {
+    es: (n: number) => `Todavía faltan ${n} luces en esta zona.`,
+    en: (n: number) => `There are still ${n} lights left in this zone.`,
+    pt: (n: number) => `Ainda faltam ${n} luzes nesta área.`,
+    hi: (n: number) => `इस जगह में अभी भी ${n} रोशनियाँ बाकी हैं।`,
+    id: (n: number) => `Masih ada ${n} cahaya lagi di area ini.`,
+    ru: (n: number) => `В этой зоне осталось ещё ${n} огоньков.`,
+    vi: (n: number) => `Khu này vẫn còn ${n} ánh sáng nữa.`,
+    zh: (n: number) => `这个区域还差${n}个亮光。`,
+    ja: (n: number) => `このエリアにはまだ${n}個光が残っているよ。`,
+    ko: (n: number) => `이 구역에는 아직 불빛이 ${n}개 남아 있어.`,
+  },
+  zonaLista: {
+    es: '¡Ya encontraste todas las luces de esta zona! Seguí explorando el planeta.',
+    en: 'You found all the lights in this zone! Keep exploring the planet.',
+    pt: 'Você encontrou todas as luzes desta área! Continue explorando o planeta.',
+    hi: 'तुमने इस जगह की सारी रोशनी ढूंढ ली! ग्रह में और घूमो।',
+    id: 'Kamu sudah menemukan semua cahaya di area ini! Terus jelajahi planetnya.',
+    ru: 'Ты нашёл все огоньки в этой зоне! Продолжай исследовать планету.',
+    vi: 'Bạn đã tìm thấy hết ánh sáng ở khu này! Hãy tiếp tục khám phá hành tinh.',
+    zh: '你已经找到这个区域的所有亮光了！继续探索星球吧。',
+    ja: 'このエリアの光を全部見つけたね！星を探検し続けよう。',
+    ko: '이 구역의 불빛을 다 찾았어! 행성을 계속 탐험해봐.',
+  },
+  faltanMundo: {
+    es: (n: number) => `Te faltan ${n} luces en todo el planeta para abrir el portal.`,
+    en: (n: number) => `You need ${n} more lights on the whole planet to open the portal.`,
+    pt: (n: number) => `Faltam ${n} luzes em todo o planeta para abrir o portal.`,
+    hi: (n: number) => `द्वार खोलने के लिए पूरे ग्रह में ${n} और रोशनियाँ चाहिए।`,
+    id: (n: number) => `Kamu perlu ${n} cahaya lagi di seluruh planet untuk membuka portal.`,
+    ru: (n: number) => `Тебе нужно найти ещё ${n} огоньков на всей планете, чтобы открыть портал.`,
+    vi: (n: number) => `Bạn cần thêm ${n} ánh sáng trên cả hành tinh để mở cổng.`,
+    zh: (n: number) => `整个星球还差${n}个亮光才能打开传送门。`,
+    ja: (n: number) => `ポータルを開けるには、星全体であと${n}個の光が必要だよ。`,
+    ko: (n: number) => `포털을 열려면 행성 전체에서 불빛이 ${n}개 더 필요해.`,
+  },
+  mundoListo: {
+    es: 'Ya juntaste todas las luces. ¡Andá al Corazón del Planeta para pasar al siguiente mundo!',
+    en: "You've collected all the lights. Head to the Heart of the Planet to move to the next world!",
+    pt: 'Você já coletou todas as luzes. Vá ao Coração do Planeta para ir ao próximo mundo!',
+    hi: 'तुमने सारी रोशनियाँ इकट्ठा कर लीं। अगली दुनिया में जाने के लिए ग्रह के हृदय पर जाओ!',
+    id: 'Kamu sudah mengumpulkan semua cahaya. Pergi ke Jantung Planet untuk lanjut ke dunia berikutnya!',
+    ru: 'Ты собрал все огоньки. Иди к Сердцу Планеты, чтобы перейти в следующий мир!',
+    vi: 'Bạn đã thu thập hết ánh sáng. Hãy đến Trái Tim Hành Tinh để sang thế giới tiếp theo!',
+    zh: '你已经收集了所有的亮光。去星球之心，进入下一个世界吧！',
+    ja: '光を全部集めたね。次の世界に行くには星のハートへ行こう！',
+    ko: '불빛을 다 모았어. 다음 세계로 가려면 행성의 심장으로 가봐!',
+  },
+};
+
+
+type Hotspot = { x: number; y: number; };
+type Zona = { indice: number; nombre: string; archivo: string; thumb: string; hotspots: Hotspot[]; };
+
+const ZONA_WIDTH = 2752;
+const ZONA_HEIGHT = 1536;
+
+const ZONAS: Zona[] = [
+  { indice: 1, nombre: 'Nido de Musgo Violeta', archivo: 'zona_01_nido_musgo.webp', thumb: 'thumb_01_nido_musgo.webp', hotspots: [{x:950,y:780},{x:1510,y:880},{x:2490,y:880}] },
+  { indice: 2, nombre: 'Cráter de las Primeras Burbujas', archivo: 'zona_02_crater_burbujas.webp', thumb: 'thumb_02_crater_burbujas.webp', hotspots: [{x:810,y:780},{x:1510,y:880},{x:2490,y:880}] },
+  { indice: 3, nombre: 'Montañas de Orejas Redondas', archivo: 'zona_03_montanas_orejas.webp', thumb: 'thumb_03_montanas_orejas.webp', hotspots: [{x:670,y:780},{x:1930,y:680},{x:2490,y:780}] },
+  { indice: 4, nombre: 'Valle de las Antenitas Dormidas', archivo: 'zona_04_valle_antenitas.webp', thumb: 'thumb_04_valle_antenitas.webp', hotspots: [{x:810,y:880},{x:1930,y:680},{x:250,y:680}] },
+  { indice: 5, nombre: 'Laguna de Gravedad Curva', archivo: 'zona_05_laguna_gravedad.webp', thumb: 'thumb_05_laguna_gravedad.webp', hotspots: [{x:670,y:780},{x:2490,y:880},{x:1930,y:980}] },
+  { indice: 6, nombre: 'Ruinas de Cristal de los Primeros Viajeros', archivo: 'zona_06_ruinas_primeros_viajeros.webp', thumb: 'thumb_06_ruinas_primeros_viajeros.webp', hotspots: [{x:670,y:780},{x:1370,y:980},{x:2210,y:680}] },
+  { indice: 7, nombre: 'Sendero de las Líneas Doradas', archivo: 'zona_07_sendero_lineas_doradas.webp', thumb: 'thumb_07_sendero_lineas_doradas.webp', hotspots: [{x:1790,y:780},{x:1230,y:780},{x:2490,y:880}] },
+  { indice: 8, nombre: 'Círculo de los Visitantes', archivo: 'zona_08_circulo_visitantes.webp', thumb: 'thumb_08_circulo_visitantes.webp', hotspots: [{x:1230,y:780},{x:1790,y:780},{x:250,y:680}] },
+  { indice: 9, nombre: 'Puerto de las Cúpulas de Cristal', archivo: 'zona_09_puerto_cupulas.webp', thumb: 'thumb_09_puerto_cupulas.webp', hotspots: [{x:1230,y:780},{x:1790,y:780},{x:670,y:980}] },
+  { indice: 10, nombre: 'Corazón del Planeta', archivo: 'zona_10_corazon_planeta.webp', thumb: 'thumb_10_corazon_planeta.webp', hotspots: [{x:950,y:880},{x:1930,y:680},{x:390,y:880}] },
 ];
 
-/* ══ OBJETOS ARRASTRABLES (100% originales, sin nombres de marcas) ══ */
-const ZONE_ITEMS: {emoji:string;label:string;action:Need;color:string;zoneHint:string}[] = [
-  {emoji:'🍕',label:'Pizza Estelar',   action:'hunger',color:'#FF6B6B',zoneHint:'kitchen'},
-  {emoji:'🍔',label:'Hamburguesa',     action:'hunger',color:'#DEB887',zoneHint:'kitchen'},
-  {emoji:'🍜',label:'Sopa Cósmica',    action:'hunger',color:'#FFD700',zoneHint:'kitchen'},
-  {emoji:'🧁',label:'Cupcake',         action:'hunger',color:'#FFB3BA',zoneHint:'snack-stand'},
-  {emoji:'🍦',label:'Helado Neón',     action:'hunger',color:'#00D4C8',zoneHint:'snack-stand'},
-  {emoji:'🧃',label:'Jugo Galaxia',    action:'hunger',color:'#FF6B6B',zoneHint:'snack-stand'},
-  {emoji:'🍭',label:'Chupetín',        action:'hunger',color:'#FF69B4',zoneHint:'candy-counter'},
-  {emoji:'🍬',label:'Caramelo',        action:'hunger',color:'#C77DFF',zoneHint:'candy-counter'},
-  {emoji:'💤',label:'Almohada Suave',  action:'sleep', color:'#B8A9FF',zoneHint:'hammock'},
-  {emoji:'🌙',label:'Manta de Luna',   action:'sleep', color:'#87CEEB',zoneHint:'cloud-house'},
-  {emoji:'🧸',label:'Osito',           action:'sleep', color:'#DEB887',zoneHint:'cloud-house'},
-  {emoji:'🎵',label:'Nota Musical',    action:'fun',   color:'#FF69B4',zoneHint:'music-stage'},
-  {emoji:'🎤',label:'Micrófono',       action:'fun',   color:'#C77DFF',zoneHint:'music-stage'},
-  {emoji:'🚀',label:'Cohetecito',      action:'fun',   color:'#87CEEB',zoneHint:'rocket-garage'},
-  {emoji:'🛸',label:'Platillo Volador',action:'fun',   color:'#00D4C8',zoneHint:'rocket-garage'},
-  {emoji:'🌸',label:'Flor Mágica',     action:'fun',   color:'#FFB3D1',zoneHint:'garden'},
-  {emoji:'🦋',label:'Mariposa',        action:'fun',   color:'#C77DFF',zoneHint:'garden'},
-  {emoji:'🎈',label:'Globo',           action:'fun',   color:'#FF6B9D',zoneHint:'garden'},
-  {emoji:'🫧',label:'Burbujas',        action:'bath',  color:'#00BFFF',zoneHint:'pool'},
-  {emoji:'🦆',label:'Patito de Baño',  action:'bath',  color:'#FFD700',zoneHint:'pool'},
-  {emoji:'💧',label:'Gotita',          action:'bath',  color:'#00CED1',zoneHint:'pool'},
-  {emoji:'💝',label:'Corazón',         action:'love',  color:'#FF4500',zoneHint:'cloud-house'},
-  {emoji:'🎁',label:'Regalo',          action:'love',  color:'#FF6B9D',zoneHint:'garden'},
-  {emoji:'🌟',label:'Estrella de Cariño',action:'love', color:'#FFD700',zoneHint:'cloud-house'},
-];
+const TOTAL_HOTSPOTS = ZONAS.reduce((acc, z) => acc + z.hotspots.length, 0);
 
-const STICKERS_SET = ['⭐','🌟','💫','✨','🌈','🦋','🌸','💎','🎈','🪐'];
+const ICONO_ZONA = ['🌿', '🫧', '🏔️', '📡', '💧', '🔮', '🌟', '🛸', '🏠', '💎'];
+const ZONA_WOW_COLOR: Record<number, string> = {
+  0: 'rgba(184,169,255,.5)', 1: 'rgba(0,212,200,.45)', 2: 'rgba(255,215,0,.4)',
+  3: 'rgba(255,179,209,.45)', 4: 'rgba(0,212,200,.55)', 5: 'rgba(255,215,0,.45)',
+  6: 'rgba(255,215,0,.5)', 7: 'rgba(150,220,180,.5)', 8: 'rgba(184,169,255,.45)', 9: 'rgba(255,255,255,.55)',
+};
 
-const IMG_W = 2544, IMG_H = 1456;
+type ActiveBurst = { id: number; x: number; y: number; zonaIdx: number; tipo?: 'sparkle' | 'splash' | 'tema'; emoji?: string; };
 
 export default function Mundo0() {
   const router = useRouter();
-  const worldRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [collected, setCollected] = useState<Set<string>>(new Set());
+  const [bursts, setBursts] = useState<ActiveBurst[]>([]);
+  const [trail, setTrail] = useState<{ id: number; x: number; y: number }[]>([]);
+  const trailId = useRef(0);
+  const lastTrailT = useRef<Record<string, number>>({});
+  const [showGuide, setShowGuide] = useState(true);
+  const [mostrarPresentacion, setMostrarPresentacion] = useState(false);
+  const [presentacionIdx, setPresentacionIdx] = useState(0);
+  const [personajeActivo, setPersonajeActivo] = useState<string>('toqwow');
+  const [zonaCompanero, setZonaCompanero] = useState<number>(0); // en que zona esta parado el personaje (una sola, no en todas a la vez)
+  const [showMap, setShowMap] = useState(false);
+  const [showLangPicker, setShowLangPicker] = useState(false);
+  const [portalNudge, setPortalNudge] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [idioma, setIdioma] = useState<string>('es');
+  const burstId = useRef(0);
 
-  const [citizens, setCitizens]       = useState<Citizen[]>(() =>
-    CITIZENS_DEF.map((c,i) => ({
-      id:i, name:c.name, emoji:c.emoji, img:c.img, color:c.color, isMascot:c.isMascot,
-      x:10+i*14, y:72, zIndex:10+i,
-      needs:{hunger:80,sleep:80,fun:80,bath:80,love:80},
-      mood:'happy', bubble:'', bubbleTimer:0,
-      hair:i%8, suit:i%8, acc:i%8,
-      dragging:false, scale:1,
-    }))
+  useEffect(() => { mutedGlobal = muted; }, [muted]);
+  useEffect(() => { idiomaGlobal = idioma; }, [idioma]);
+
+  // El idioma real (detectado o guardado) se aplica recien montado en el cliente,
+  // para que el primer render coincida siempre con el HTML del servidor (evita
+  // errores de hidratacion que podian tirar abajo toda la pagina).
+  useEffect(() => {
+    const real = detectarIdiomaInicial();
+    if (real !== 'es') setIdioma(real);
+  }, []);
+
+  const elegirIdioma = useCallback((id: string) => {
+    setIdioma(id);
+    guardarIdioma(id as any);
+    note(659, 0.15, 0.15);
+  }, []);
+
+  // Roster de amigos adicionales, convocables desde la bandeja inferior
+  const AMIGOS_EXTRA = [
+    { id: 'zoe', src: 'char_zoe.png', nombre: 'Zoe' },
+    { id: 'puli', src: 'char_puli.png', nombre: 'Puli' },
+    { id: 'tito', src: 'char_tito.png', nombre: 'Tito' },
+    { id: 'luta', src: 'char_luta.png', nombre: 'Luta' },
+    { id: 'copo', src: 'char_copo.png', nombre: 'Copo de Nieve' },
+    { id: 'vago', src: 'char_vago_v2.png', nombre: 'Vago' },
+    { id: 'michi', src: 'char_michi_v2.png', nombre: 'Michi' },
+  ];
+  // Roster completo (10) para la presentacion inicial y referencia general
+  const TODOS_PERSONAJES = [
+    { id: 'toqwow', src: 'char_toqwow_v3.png', nombre: 'Toqwow' },
+    { id: 'tizi', src: 'char_tizi_v3.png', nombre: 'Tizi' },
+    { id: 'coti', src: 'char_coti_v3.png', nombre: 'Coti' },
+    ...AMIGOS_EXTRA,
+  ];
+  const PERSONAJE_POR_ID: Record<string, { src: string; nombre: string }> = Object.fromEntries(
+    TODOS_PERSONAJES.map(p => [p.id, { src: p.src, nombre: p.nombre }])
   );
-  const [buildings, setBuildings]     = useState<BuildingItem[]>(() =>
-    ZONE_ITEMS.map((item,i) => ({
-      id:uid++, emoji:item.emoji, label:item.label, action:item.action, zoneHint:item.zoneHint,
-      x:4+(i%6)*15.5, y:6+Math.floor(i/6)*5, sz:34, color:item.color,
-      zIndex:i+1, dragging:false, scale:1,
-    }))
-  );
-  const [particles, setParticles]     = useState<Particle[]>([]);
-  const [stickers,  setStickers]      = useState<Sticker[]>([]);
-  const [comboMsg, setComboMsg]       = useState('');
-  const [showCombo, setShowCombo]     = useState(false);
-  const [selectedCit, setSelectedCit] = useState<number|null>(null);
-  const [showCustomize, setShowCustomize] = useState(false);
-  const [showZoneDebug, setShowZoneDebug] = useState(false);
-  const [dragSticker, setDragSticker] = useState<{emoji:string,sx:number,sy:number}|null>(null);
-  const [showTutorial, setShowTutorial] = useState(false);
-  const [visitedZones, setVisitedZones] = useState<Set<string>>(()=>new Set());
-  const [stars, setStars] = useState(0);
-  const [showWorldComplete, setShowWorldComplete] = useState(false);
-  const [worldDone, setWorldDone] = useState(false);
+  const [amigosEnJuego, setAmigosEnJuego] = useState<Record<string, number>>({}); // id -> zonaIdx donde esta parado
+  const [zonaVisible, setZonaVisible] = useState(0);
 
-  const scrollRef    = useRef<HTMLDivElement>(null);
-  const contentRef   = useRef<HTMLDivElement>(null); // el "mundo" real, tamaño fijo, con scroll horizontal
-  const draggingId   = useRef<number|null>(null);
-  const draggingBld  = useRef<number|null>(null);
-  const dragOff      = useRef({x:0,y:0});
-  const maxZ         = useRef(50);
-  const dragStickerRef = useRef(false);
-  const citizenZoneRef = useRef<Record<number,string|null>>({});
-  const needTimer    = useRef<ReturnType<typeof setInterval>|null>(null);
+  const detectarZonaVisible = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return 0;
+    const zw = el.scrollWidth / ZONAS.length;
+    return Math.round(el.scrollLeft / zw);
+  }, []);
 
-  /* Centrar el scroll horizontal al entrar, para que arranque mostrando la
-     pileta central en vez del borde izquierdo de la imagen. */
-  useEffect(()=>{
-    const sc = scrollRef.current; if(!sc) return;
-    requestAnimationFrame(()=>{ sc.scrollLeft = (sc.scrollWidth - sc.clientWidth)/2; });
-  },[]);
+  const zonasExplicadasRef = useRef<Set<number>>(new Set());
+  const [cartelZona, setCartelZona] = useState<number | null>(null);
+  const [cartelAyuda, setCartelAyuda] = useState<string | null>(null);
+  const [companionPulseZona, setCompanionPulseZona] = useState<number | null>(null);
+  const cartelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /* Mano tutorial: solo la primera vez que un chico entra al mundo, sin
-     texto — desaparece sola apenas hay un primer toque real. */
-  useEffect(()=>{
-    try{ if(!localStorage.getItem('tq_m0_tutorial_seen')) setShowTutorial(true); }catch{}
-  },[]);
-  const dismissTutorial = useCallback(()=>{
-    setShowTutorial(false);
-    try{ localStorage.setItem('tq_m0_tutorial_seen','1'); }catch{}
-  },[]);
+  const pedirAyuda = useCallback((zi: number) => {
+    const faltanZona = ZONAS[zi].hotspots.filter((_, hi) => !collected.has(`${zi}-${hi}`)).length;
+    const faltanMundo = TOTAL_HOTSPOTS - collected.size;
+    const IDIOMAS_SOPORTADOS = ['es', 'en', 'pt', 'hi', 'id', 'ru', 'vi', 'zh', 'ja', 'ko'] as const;
+    const idx = (IDIOMAS_SOPORTADOS.includes(idioma as any) ? idioma : 'es') as typeof IDIOMAS_SOPORTADOS[number];
+    const parte1 = faltanZona > 0 ? PROGRESO_TXT.faltanZona[idx](faltanZona) : PROGRESO_TXT.zonaLista[idx];
+    const parte2 = faltanMundo > 0 ? PROGRESO_TXT.faltanMundo[idx](faltanMundo) : PROGRESO_TXT.mundoListo[idx];
+    const texto = `${parte1} ${parte2}`;
+    setCartelZona(null);
+    setCartelAyuda(texto);
+    hablarTexto(texto);
+    note(659, 0.15, 0.15);
+    if (cartelTimeoutRef.current) clearTimeout(cartelTimeoutRef.current);
+    cartelTimeoutRef.current = setTimeout(() => setCartelAyuda(null), 5500);
+  }, [collected, idioma]);
 
-  useEffect(()=>{
-    try{ if(localStorage.getItem('tq_m0_world_complete')) setWorldDone(true); }catch{}
-  },[]);
+  const mostrarCartelZona = useCallback((zi: number) => {
+    if (zonasExplicadasRef.current.has(zi)) return;
+    zonasExplicadasRef.current.add(zi);
+    setCartelZona(zi);
+    hablar(`zona${zi}`);
+    if (cartelTimeoutRef.current) clearTimeout(cartelTimeoutRef.current);
+    cartelTimeoutRef.current = setTimeout(() => setCartelZona(null), 4200);
+  }, []);
 
-  /* Marca una zona como "visitada": suma puntitos (más la primera vez),
-     y si ya se recorrieron todas, desbloquea el pase al siguiente mundo. */
-  const markZoneVisited = useCallback((zone:Zone)=>{
-    setVisitedZones(prev=>{
-      if(prev.has(zone.id)){ setStars(s=>s+1); return prev; }
-      const next = new Set(prev); next.add(zone.id);
-      setStars(s=>s+10);
-      if(next.size>=ZONES.length){
-        setShowWorldComplete(true);
-        setWorldDone(true);
-        try{ localStorage.setItem('tq_m0_world_complete','1'); }catch{}
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || mostrarPresentacion) return;
+    let debounce: ReturnType<typeof setTimeout>;
+    const onScroll = () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        const nueva = detectarZonaVisible();
+        setZonaVisible(nueva);
+        mostrarCartelZona(nueva);
+      }, 350);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    // Mostrar cartel de la Zona 0 apenas se carga el mundo (o apenas se cierra la presentacion)
+    const t = setTimeout(() => mostrarCartelZona(0), 1200);
+    return () => { el.removeEventListener('scroll', onScroll); clearTimeout(debounce); clearTimeout(t); };
+  }, [detectarZonaVisible, mostrarCartelZona, mostrarPresentacion]);
+
+  const convocarAmigo = useCallback((id: string) => {
+    setAmigosEnJuego(prev => ({ ...prev, [id]: zonaVisible }));
+    hablar('nuevoAmigo');
+    melody([440, 554, 659], 90, 0.25, 0.16);
+    vib(15);
+  }, [zonaVisible]);
+
+  // ---- Sistema transversal de arrastre: fisica de inercia + squash&stretch + reacciones ----
+  type DragInfo = { key: string; startClientX: number; startClientY: number; startX: number; startY: number; lastX: number; lastY: number; lastT: number; vx: number; vy: number; };
+  const [dragPos, setDragPos] = useState<Record<string, { x: number; y: number }>>({});
+  const [squash, setSquash] = useState<Record<string, 'grab' | 'drop' | null>>({});
+  const [floating, setFloating] = useState<Record<string, boolean>>({});
+  const dragState = useRef<DragInfo | null>(null);
+  const mapHoverStartT = useRef<number | null>(null);
+  const rafRef = useRef<Record<string, number>>({});
+  const lastRunSoundT = useRef<Record<string, number>>({});
+  const runStepAlto = useRef<Record<string, boolean>>({});
+  const yaReaccionoEnDrag = useRef<Record<string, Set<number>>>({});
+  const lastHoverCheckT = useRef<Record<string, number>>({});
+
+  const clearCoast = (key: string) => {
+    if (rafRef.current[key]) { cancelAnimationFrame(rafRef.current[key]); delete rafRef.current[key]; }
+  };
+
+  const startDrag = useCallback((key: string) => (e: React.PointerEvent) => {
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    clearCoast(key);
+    const current = dragPos[key] || { x: 0, y: 0 };
+    const now = performance.now();
+    dragState.current = { key, startClientX: e.clientX, startClientY: e.clientY, startX: current.x, startY: current.y, lastX: e.clientX, lastY: e.clientY, lastT: now, vx: 0, vy: 0 };
+    setSquash(prev => ({ ...prev, [key]: 'grab' }));
+    setPersonajeActivo(key.slice(0, key.lastIndexOf('-')));
+    const ziDeKey = parseInt(key.slice(key.lastIndexOf('-') + 1), 10);
+    if (!Number.isNaN(ziDeKey)) setZonaCompanero(ziDeKey);
+    delete yaReaccionoEnDrag.current[key];
+    mapHoverStartT.current = null;
+    note(660, 0.15, 0.15); vib(10);
+  }, [dragPos]);
+
+  const coast = useCallback((key: string, vx: number, vy: number) => {
+    let velX = vx * 16, velY = vy * 16;
+    const friction = 0.9;
+    const step = () => {
+      velX *= friction; velY *= friction;
+      setDragPos(prev => {
+        const cur = prev[key] || { x: 0, y: 0 };
+        return { ...prev, [key]: { x: cur.x + velX, y: cur.y + velY } };
+      });
+      if (Math.abs(velX) > 0.3 || Math.abs(velY) > 0.3) {
+        rafRef.current[key] = requestAnimationFrame(step);
+      } else {
+        delete rafRef.current[key];
+      }
+    };
+    rafRef.current[key] = requestAnimationFrame(step);
+  }, []);
+
+  // Puntos de reaccion tematica por zona (reutilizan coordenadas de los hotspots como anclas de objetos clave)
+  const PUNTOS_REACCION: Record<number, { x: number; y: number; tipo: string; emoji: string; sonido: () => void }[]> = {};
+  const RADIO_REACCION = 260; // px en coordenadas nativas de la zona (2752x1536)
+  const RADIO_HOTSPOT = 260; // px en coordenadas nativas — mismo criterio que los puntos tematicos
+  const [rumbleZona, setRumbleZona] = useState<number | null>(null);
+
+  // Reacciones de personalidad: que hace CADA personaje al soltarlo en CADA zona (segun el GDD)
+  const REACCIONES_PERSONAJE: Record<string, { emoji: string; sonido: () => void }> = {};
+  const CELEBRACION_PERSONAJE: Record<string, string> = {
+    toqwow: '🌟', tizi: '🎀', coti: '👓', zoe: '🎉', puli: '📚', tito: '💃', luta: '💪', copo: '🐾', vago: '🐕', michi: '😻',
+  };
+
+  const chequearPuntosTematicos = useCallback((zi: number, key: string, e: React.PointerEvent) => {
+    const puntos = PUNTOS_REACCION[zi];
+    if (!puntos) return;
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const container = target.closest('[data-zona-container]') as HTMLElement | null;
+    if (!container) return;
+    const contRect = container.getBoundingClientRect();
+    const relX = (rect.left + rect.width / 2 - contRect.left) / contRect.width;
+    const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
+    const nativeX = relX * ZONA_WIDTH;
+    const nativeY = relY * ZONA_HEIGHT;
+    const yaSet = yaReaccionoEnDrag.current[key] || (yaReaccionoEnDrag.current[key] = new Set());
+    for (let pi = 0; pi < puntos.length; pi++) {
+      if (yaSet.has(pi)) continue;
+      const punto = puntos[pi];
+      const dist = Math.hypot(nativeX - punto.x, nativeY - punto.y);
+      if (dist < RADIO_REACCION) {
+        yaSet.add(pi);
+        const id = ++burstId.current;
+        const px = contRect.left + (punto.x / ZONA_WIDTH) * contRect.width;
+        const py = contRect.top + (punto.y / ZONA_HEIGHT) * contRect.height;
+        setBursts(prev => [...prev, { id, x: px, y: py, zonaIdx: zi, tipo: 'tema', emoji: punto.emoji }]);
+        setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 1300);
+        punto.sonido();
+        melody([440, 659, 880], 80, 0.25, 0.18);
+        vib(punto.tipo === 'rumble' ? [10, 30, 10] : [15, 20, 15]);
+        if (punto.tipo === 'rumble') {
+          setRumbleZona(zi);
+          setTimeout(() => setRumbleZona(null), 350);
+        }
+        break;
+      }
+    }
+  }, []);
+
+  const chequearReaccion = useCallback((zi: number, key: string, e: React.PointerEvent) => {
+    const charId = key.slice(0, key.lastIndexOf('-'));
+    if (zi === 4) {
+      const target = e.currentTarget as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      const container = target.closest('[data-zona-container]') as HTMLElement | null;
+      if (!container) return;
+      const contRect = container.getBoundingClientRect();
+      const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
+      const enAgua = relY > 0.42;
+
+      // Michi se resiste al agua: reaccion propia en vez de flotar
+      if (charId === 'michi' && enAgua) {
+        const id = ++burstId.current;
+        setBursts(prev => [...prev, { id, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, zonaIdx: zi, tipo: 'sparkle', emoji: '💨' }]);
+        setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
+        note(311, 0.2, 0.2, 'sawtooth');
+        vib([10, 10, 10]);
+        return;
+      }
+
+      const yaFlotando = !!floating[key];
+      setFloating(prev => ({ ...prev, [key]: enAgua }));
+      if (enAgua && !yaFlotando) {
+        const id = ++burstId.current;
+        setBursts(prev => [...prev, { id, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, zonaIdx: zi, tipo: 'splash' }]);
+        setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
+        melody([392, 330, 262], 110, 0.35, 0.2);
+        vib([15, 20, 15, 30]);
+      } else if (!enAgua && yaFlotando) {
+        note(440, 0.15, 0.15);
+      }
+      return;
+    }
+
+    // Reaccion de personalidad especifica (personaje + zona), si esta definida
+    const reaccionPersonal = REACCIONES_PERSONAJE[`${zi}-${charId}`];
+    if (reaccionPersonal) {
+      const target = e.currentTarget as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      const id = ++burstId.current;
+      setBursts(prev => [...prev, { id, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, zonaIdx: zi, tipo: 'sparkle', emoji: reaccionPersonal.emoji }]);
+      setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
+      reaccionPersonal.sonido();
+      vib(15);
+      return;
+    }
+
+    // Celebracion especial en el Corazon del Planeta (Zona 10) si el mundo ya esta completo
+    if (zi === 9 && collected.size === TOTAL_HOTSPOTS) {
+      const emoji = CELEBRACION_PERSONAJE[charId];
+      if (emoji) {
+        const target = e.currentTarget as HTMLElement;
+        const rect = target.getBoundingClientRect();
+        const id = ++burstId.current;
+        setBursts(prev => [...prev, { id, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, zonaIdx: zi, tipo: 'sparkle', emoji }]);
+        setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
+        melody([659, 784, 988, 1318], 80, 0.3, 0.2);
+        vib([15, 15, 15, 40]);
+        return;
+      }
+    }
+
+    chequearPuntosTematicos(zi, key, e);
+  }, [floating, chequearPuntosTematicos, collected]);
+
+  const squashTransform = (key: string) => {
+    const sq = squash[key];
+    if (sq === 'grab') return 'scale(0.88,1.12)';
+    if (sq === 'drop') return 'scale(1.15,0.85)';
+    return 'scale(1,1)';
+  };
+
+
+  // Presentacion inicial: Toqwow nombra a los 10 personajes disponibles desde el dia 1,
+  // cada vez que se entra a Mundo 0 (Planeta Tiqui). El nino puede cambiar de personaje activo en
+  // cualquier zona despues (bandeja + Tizi/Coti siempre presentes).
+  useEffect(() => {
+    setMostrarPresentacion(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mostrarPresentacion) return;
+    let cancelado = false;
+
+    if (presentacionIdx === 0) {
+      const t0 = setTimeout(() => {
+        if (cancelado) return;
+        melody([523, 659, 784], 80, 0.3, 0.18);
+        vib(15);
+        hablarTexto(FRASES.presentacionIntro[idiomaGlobal] || FRASES.presentacionIntro.es, () => {
+          if (cancelado) return;
+          setTimeout(() => { if (!cancelado) setPresentacionIdx(1); }, 500);
+        });
+      }, 600);
+      return () => { cancelado = true; clearTimeout(t0); };
+    }
+
+    const i = presentacionIdx - 1;
+    if (i < TODOS_PERSONAJES.length) {
+      const t = setTimeout(() => {
+        if (cancelado) return;
+        note(880, 0.15, 0.15);
+        vib(10);
+        hablarTexto(TODOS_PERSONAJES[i].nombre, () => {
+          if (cancelado) return;
+          setTimeout(() => { if (!cancelado) setPresentacionIdx(p => p + 1); }, 450);
+        });
+      }, 350);
+      return () => { cancelado = true; clearTimeout(t); };
+    }
+
+    if (i === TODOS_PERSONAJES.length) {
+      // Ya se nombraron los 10 — ahora se indica que elija uno para jugar
+      const t3 = setTimeout(() => {
+        if (cancelado) return;
+        melody([659, 784, 988], 90, 0.3, 0.2);
+        vib([15, 15, 30]);
+        hablarTexto(FRASES.elegirParaJugar[idiomaGlobal] || FRASES.elegirParaJugar.es);
+      }, 500);
+      return () => { cancelado = true; clearTimeout(t3); };
+    }
+  }, [mostrarPresentacion, presentacionIdx]);
+
+  const cerrarPresentacion = useCallback((idElegido?: string) => {
+    setMostrarPresentacion(false);
+    if (idElegido) setPersonajeActivo(idElegido);
+    melody([440, 554, 659, 880], 90, 0.3, 0.2);
+    vib([15, 20, 15, 30]);
+    setTimeout(() => hablar('bienvenida'), 500);
+  }, []);
+
+  useEffect(() => {
+    const seen = typeof window !== 'undefined' && window.localStorage.getItem('toqwow_mundo0_tutorial_visto');
+    if (seen) setShowGuide(false);
+  }, []);
+
+  const dismissGuide = useCallback(() => {
+    setShowGuide(false);
+    try { window.localStorage.setItem('toqwow_mundo0_tutorial_visto', '1'); } catch {}
+  }, []);
+
+  const [zonaCelebrando, setZonaCelebrando] = useState<number | null>(null);
+  const [wowZona, setWowZona] = useState<number | null>(null);
+
+  const dispararWow = useCallback((zi: number) => {
+    setWowZona(zi);
+    const secuencias: Record<number, () => void> = {
+      0: () => melody([659, 784, 988, 1318], 110, 0.4, 0.22),
+      1: () => { melody([392, 494, 587, 740, 880], 90, 0.35, 0.2); },
+      2: () => melody([523, 659, 784, 1046, 1318], 80, 0.3, 0.2),
+      3: () => melody([440, 554, 659, 880, 1108], 100, 0.35, 0.22),
+      4: () => melody([392, 330, 392, 494, 587], 100, 0.3, 0.2),
+      5: () => melody([784, 880, 988, 1174], 120, 0.4, 0.2),
+      6: () => melody([659, 830, 988, 1318, 1568], 90, 0.3, 0.22),
+      7: () => { note(90, 0.4, 0.25, 'sawtooth'); setTimeout(() => melody([440, 554, 659], 100, 0.3, 0.2), 300); },
+      8: () => melody([523, 659, 784, 1046], 130, 0.45, 0.22),
+      9: () => melody([659, 784, 988, 1318, 1568, 2093], 100, 0.4, 0.25),
+    };
+    (secuencias[zi] || secuencias[0])();
+    vib([20, 40, 20, 40, 90]);
+    setTimeout(() => setWowZona(null), 2600);
+  }, []);
+
+  const activarHotspot = useCallback((zonaIdx: number, hIdx: number, x: number, y: number) => {
+    const key = `${zonaIdx}-${hIdx}`;
+    setCollected(prev => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      const zonaYaCompletaba = ZONAS[zonaIdx].hotspots.every((_, hi) => next.has(`${zonaIdx}-${hi}`));
+      const zonaYaEstabaCompleta = ZONAS[zonaIdx].hotspots.every((_, hi) => prev.has(`${zonaIdx}-${hi}`));
+      if (zonaYaCompletaba && !zonaYaEstabaCompleta) {
+        setTimeout(() => {
+          setZonaCelebrando(zonaIdx);
+          hablar('zonaCompleta');
+          dispararWow(zonaIdx);
+          setTimeout(() => setZonaCelebrando(null), 1800);
+        }, 200);
       }
       return next;
     });
-  },[]);
+    const id = ++burstId.current;
+    setBursts(prev => [...prev, { id, x, y, zonaIdx, tipo: 'sparkle' }]);
+    setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 900);
+    melody([523, 659, 784]);
+    vib(20);
+    if (showGuide) dismissGuide();
+  }, [showGuide, dismissGuide, dispararWow]);
 
-  /* Efecto completo (sonido+vibración+brillitos+puntos) al acercarse a
-     una zona — con objeto o simplemente caminando hasta ahí. Más grande
-     la primera vez que se descubre esa zona. */
-  const triggerZoneEffect = useCallback((zone:Zone, xPct:number, yPct:number)=>{
-    const firstTime = !visitedZones.has(zone.id);
-    if(firstTime) melody([523,659,784,1047,1319],80,0.3,0.2);
-    else note(ri(700,1000),0.15,0.14);
-    vib(firstTime?[30,20,30,20,40]:[20,10,20]);
-    const box = contentRef.current?.getBoundingClientRect();
-    const cx=(box?.left||0)+(xPct/100)*(box?.width||0), cy=(box?.top||0)+(yPct/100)*(box?.height||0);
-    const n = firstTime?14:6;
-    for(let i=0;i<n;i++) setTimeout(()=>{
-      const pe:Particle[]=[{id:uid++,x:cx+r(-24,24),y:cy+r(-24,24),e:firstTime?'✨':'⭐'}];
-      setParticles(p=>[...p,...pe]);
-      setTimeout(()=>setParticles(p=>p.filter(pp=>!pe.find(x=>x.id===pp.id))),800);
-    },i*45);
-    setComboMsg(firstTime?`✨ ¡${zone.name}! ✨`:`⭐ ${zone.name}`);
-    setShowCombo(true); setTimeout(()=>setShowCombo(false),firstTime?2600:1400);
-    markZoneVisited(zone);
-  },[visitedZones,markZoneVisited]);
-
-  /* Personaje con la necesidad más urgente ahora mismo (para guiar con
-     brillo, sin palabras, qué tocar). null si todos están bien. */
-  const neediest = useMemo(()=>{
-    let worst:{id:number,need:Need,val:number}|null = null;
-    for (const c of citizens) {
-      if (c.isMascot) continue;
-      for (const [k,v] of Object.entries(c.needs) as [Need,number][]) {
-        if (v<45 && (!worst || v<worst.val)) worst = {id:c.id,need:k,val:v};
+  // Las lucesitas ya no se completan al tocarlas: se completan al soltar un personaje
+  // arrastrado cerca (mismo criterio de proximidad que los puntos tematicos). Devuelve
+  // true si activo alguna, para que endDrag sepa que hubo match.
+  const chequearHotspots = useCallback((zi: number, e: React.PointerEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const container = target.closest('[data-zona-container]') as HTMLElement | null;
+    if (!container) return false;
+    const contRect = container.getBoundingClientRect();
+    const relX = (rect.left + rect.width / 2 - contRect.left) / contRect.width;
+    const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
+    const nativeX = relX * ZONA_WIDTH;
+    const nativeY = relY * ZONA_HEIGHT;
+    const zona = ZONAS[zi];
+    for (let hi = 0; hi < zona.hotspots.length; hi++) {
+      const key = `${zi}-${hi}`;
+      if (collected.has(key)) continue;
+      const h = zona.hotspots[hi];
+      const dist = Math.hypot(nativeX - h.x, nativeY - h.y);
+      if (dist < RADIO_HOTSPOT) {
+        const px = contRect.left + (h.x / ZONA_WIDTH) * contRect.width;
+        const py = contRect.top + (h.y / ZONA_HEIGHT) * contRect.height;
+        activarHotspot(zi, hi, px, py);
+        return true;
       }
     }
-    return worst;
-  },[citizens]);
+    return false;
+  }, [collected, activarHotspot]);
 
-  /* % de la imagen a partir de un punto de pantalla — usa el rectángulo
-     real del contenido (contentRef), que el navegador ya calcula solo
-     (aspect-ratio CSS + flex), sin necesidad de recalcular a mano en JS
-     ni de escuchar resize/orientationchange. Funciona igual haya scroll
-     horizontal o no. */
-  const toImgPct = useCallback((clientX:number, clientY:number)=>{
-    const box = contentRef.current!.getBoundingClientRect();
-    return { x:((clientX-box.left)/box.width)*100, y:((clientY-box.top)/box.height)*100 };
-  },[]);
+  const abrirMapaConSonido = useCallback(() => {
+    setShowMap(true);
+    melody([392, 523, 659], 90, 0.3, 0.15);
+    vib(15);
+    hablar('mapa');
+  }, []);
 
-  const zoneAt = useCallback((xPct:number, yPct:number): Zone|null=>{
-    return ZONES.find(z => xPct>=z.x && xPct<=z.x+z.w && yPct>=z.y && yPct<=z.y+z.h) || null;
-  },[]);
+  // Zona 0 "Puerta de Musgo": el tronco-mapa esta en left:22%, top:66% del contenedor de zona
+  const irAZona = useCallback((zi: number) => {
+    setShowMap(false);
+    const el = scrollRef.current;
+    if (!el) return;
+    const target = el.children[zi] as HTMLElement;
+    target?.scrollIntoView({ behavior: 'smooth', inline: 'start' });
+    // El personaje elegido "viaja con vos": deja de existir en la zona anterior y
+    // aparece limpio (sin offsets viejos) en la zona elegida, resaltado.
+    const key = `${personajeActivo}-${zi}`;
+    setDragPos(prev => ({ ...prev, [key]: { x: 0, y: 0 } }));
+    setZonaCompanero(zi);
+    setTimeout(() => {
+      note(880, 0.15, 0.15);
+      vib(15);
+      setCompanionPulseZona(zi);
+      setTimeout(() => setCompanionPulseZona(null), 1700);
+    }, 550);
+  }, [personajeActivo]);
 
-  useEffect(()=>{
-    needTimer.current = setInterval(()=>{
-      setCitizens(prev=>prev.map(ch=>{
-        if(ch.isMascot) return ch;
-        const n={...ch.needs};
-        n.hunger=Math.max(0,n.hunger-r(0.3,0.7));
-        n.sleep =Math.max(0,n.sleep -r(0.2,0.5));
-        n.fun   =Math.max(0,n.fun   -r(0.25,0.6));
-        n.bath  =Math.max(0,n.bath  -r(0.15,0.4));
-        n.love  =Math.max(0,n.love  -r(0.2,0.45));
-        return {...ch,needs:n,mood:calcMood(n)};
-      }));
-    },2000);
-    return ()=>{if(needTimer.current)clearInterval(needTimer.current);};
-  },[]);
-
-  const interact = useCallback((citId:number, action:Need, bonus:boolean)=>{
-    setCitizens(prev=>prev.map(ch=>{
-      if(ch.id!==citId) return ch;
-      const gain = bonus?45:28;
-      const n={...ch.needs,[action]:Math.min(100,ch.needs[action]+gain)};
-      const mood=calcMood(n);
-      NEED_SND[action](); vib([30,15,30]);
-      for(let i=0;i<(bonus?12:6);i++) setTimeout(()=>{
-        const box = contentRef.current?.getBoundingClientRect();
-        const pxv = (box?.left||0) + r(20,80)/100*(box?.width||0);
-        const pyv = (box?.top ||0) + r(25,70)/100*(box?.height||0);
-        const pe:Particle[]=[{id:uid++,x:pxv,y:pyv,e:NEED_ICONS[action]}];
-        setParticles(p=>[...p,...pe]);
-        setTimeout(()=>setParticles(p=>p.filter(pp=>!pe.find(x=>x.id===pp.id))),800);
-      },i*60);
-      setComboMsg(bonus?`✨ ¡${NEED_LABEL[action]} al máximo! ✨`:`${NEED_ICONS[action]} ¡${NEED_LABEL[action]} satisfecho!`);
-      setShowCombo(true); setTimeout(()=>setShowCombo(false),2400);
-      return{...ch,needs:n,mood,bubble:MOOD_BUBBLE[mood],bubbleTimer:Date.now()+3000};
-    }));
-  },[]);
-
-  const onBldDown = useCallback((e:React.PointerEvent,id:number)=>{
-    e.stopPropagation();(e.target as Element).setPointerCapture(e.pointerId);
-    draggingBld.current=id;maxZ.current++;
-    const bld=buildings.find(b=>b.id===id)!;
-    const p = toImgPct(e.clientX,e.clientY);
-    dragOff.current={x:p.x-bld.x,y:p.y-bld.y};
-    setBuildings(prev=>prev.map(b=>b.id===id?{...b,dragging:true,zIndex:maxZ.current,scale:1.25}:b));
-    note(ri(300,600),0.1,0.12);vib(12);
-  },[buildings,toImgPct]);
-  const onBldMove = useCallback((e:React.PointerEvent,id:number)=>{
-    if(draggingBld.current!==id)return;
-    const p = toImgPct(e.clientX,e.clientY);
-    setBuildings(prev=>prev.map(b=>b.id===id?{...b,x:Math.max(0,Math.min(96,p.x-dragOff.current.x)),y:Math.max(0,Math.min(94,p.y-dragOff.current.y))}:b));
-  },[toImgPct]);
-  const onBldUp = useCallback((e:React.PointerEvent, bldId:number)=>{
-    if(draggingBld.current!==bldId) return;
-    draggingBld.current=null;
-    const bld=buildings.find(b=>b.id===bldId);
-    setBuildings(prev=>prev.map(b=>b.id===bldId?{...b,dragging:false,scale:1}:b));
-    if(!bld) return;
-    const p = toImgPct(e.clientX,e.clientY);
-    const target = citizens.find(c=>Math.abs(c.x-p.x)<10&&Math.abs(c.y-p.y)<12);
-    const z = zoneAt(p.x,p.y);
-    const inRightZone = !!z && z.id===bld.zoneHint;
-    if (target) {
-      interact(target.id, bld.action, inRightZone);
-      if (inRightZone && z) markZoneVisited(z);
-    } else if (inRightZone && z) {
-      triggerZoneEffect(z, p.x, p.y);
+  // Con el mapa abierto, si el personaje (que se sigue arrastrando, sin haber soltado
+  // el dedo) pasa sobre una miniatura de zona, viaja ahi mismo -- gesto continuo,
+  // sin necesitar un segundo toque separado.
+  const chequearThumbnailMapa = useCallback((e: React.PointerEvent) => {
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const thumbEl = el?.closest('[data-zona-thumb]') as HTMLElement | null;
+    if (!thumbEl) return;
+    const zi = parseInt(thumbEl.getAttribute('data-zona-thumb') || '-1', 10);
+    if (zi < 0) return;
+    if (dragState.current) {
+      const key = dragState.current.key;
+      try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch {}
+      dragState.current = null;
+      autoScrollDir.current = 0;
+      setSquash(prev => ({ ...prev, [key]: null }));
     }
-  },[buildings,citizens,interact,toImgPct,zoneAt,markZoneVisited,triggerZoneEffect]);
+    irAZona(zi);
+  }, [irAZona]);
 
-  /* Reacción universal: CUALQUIER toque a un personaje (en cualquier
-     momento, sin necesitar ningún "modo") rebota + suena + muestra un
-     globito amistoso. Esto es lo que hace que el juego responda siempre,
-     sin que el chico tenga que entender nada primero. */
-  const greet = useCallback((id:number)=>{
-    setCitizens(prev=>prev.map(c=>c.id===id?{...c,bubble:GREET_BUBBLES[ri(0,GREET_BUBBLES.length)],bubbleTimer:Date.now()+1400}:c));
-    GREET_SND(); vib(15);
-  },[]);
-
-  const onCitDown = useCallback((e:React.PointerEvent,id:number)=>{
-    e.stopPropagation();(e.target as Element).setPointerCapture(e.pointerId);
-    dismissTutorial();
-    draggingId.current=id;maxZ.current++;
-    const ch = citizens.find(c=>c.id===id)!;
-    const p = toImgPct(e.clientX,e.clientY);
-    dragOff.current={x:p.x-ch.x,y:p.y-ch.y};
-    setCitizens(prev=>prev.map(c=>c.id===id?{...c,dragging:true,zIndex:maxZ.current,scale:1.15}:c));
-    greet(id);
-  },[citizens,toImgPct,greet,dismissTutorial]);
-  const onCitMove = useCallback((e:React.PointerEvent,id:number)=>{
-    if(draggingId.current!==id)return;
-    const p = toImgPct(e.clientX,e.clientY);
-    const nx = Math.max(2,Math.min(94,p.x-dragOff.current.x));
-    const ny = Math.max(5,Math.min(92,p.y-dragOff.current.y));
-    setCitizens(prev=>prev.map(c=>c.id===id?{...c,x:nx,y:ny}:c));
-    const z = zoneAt(nx,ny);
-    const zid = z?z.id:null;
-    if(citizenZoneRef.current[id]!==zid){
-      citizenZoneRef.current[id]=zid;
-      if(z) triggerZoneEffect(z,nx,ny);
-    }
-  },[toImgPct,zoneAt,triggerZoneEffect]);
-  const onCitUp = useCallback((e:React.PointerEvent,id:number)=>{
-    if(draggingId.current!==id)return;
-    draggingId.current=null;
-    setCitizens(prev=>prev.map(c=>c.id===id?{...c,dragging:false,scale:1}:c));
-    note(ri(300,500),0.15,0.12);vib(10);
-  },[]);
-
-  /* Tocar el avatar de un personaje en la bandeja de abajo lo selecciona,
-     lo saluda, y desliza el mundo hasta donde está — sin texto, sin
-     pestañas: "tocá la carita, aparece el amigo". */
-  const scrollToCitizen = useCallback((id:number)=>{
-    const ch = citizens.find(c=>c.id===id); if(!ch) return;
-    const sc = scrollRef.current, ct = contentRef.current; if(!sc||!ct) return;
-    const targetLeft = (ch.x/100)*ct.offsetWidth - sc.clientWidth/2;
-    sc.scrollTo({left:Math.max(0,Math.min(sc.scrollWidth-sc.clientWidth,targetLeft)),behavior:'smooth'});
-  },[citizens]);
-  const onTrayCitTap = useCallback((id:number)=>{
-    dismissTutorial();
-    setSelectedCit(id);
-    greet(id);
-    scrollToCitizen(id);
-  },[greet,scrollToCitizen,dismissTutorial]);
-
-  /* Arrastrar un sticker desde la bandeja hasta el mundo — reemplaza el
-     viejo "modo decorar": ahora es la misma acción de drag-and-drop que
-     ya usan los objetos, sin necesitar activar nada antes. */
-  const onStickerTrayDown = useCallback((e:React.PointerEvent, emoji:string)=>{
-    e.stopPropagation();(e.target as Element).setPointerCapture(e.pointerId);
-    dismissTutorial();
-    dragStickerRef.current = true;
-    setDragSticker({emoji, sx:e.clientX, sy:e.clientY});
-    note(ri(500,800),0.12,0.14);vib(10);
-  },[dismissTutorial]);
-  const onStickerTrayMove = useCallback((e:React.PointerEvent)=>{
-    if(!dragStickerRef.current)return;
-    setDragSticker(d=>d?{...d,sx:e.clientX,sy:e.clientY}:d);
-  },[]);
-  const onStickerTrayUp = useCallback((e:React.PointerEvent)=>{
-    if(!dragStickerRef.current)return;
-    dragStickerRef.current=false;
-    const box = contentRef.current?.getBoundingClientRect();
-    setDragSticker(d=>{
-      if(box && d){
-        const x=((e.clientX-box.left)/box.width)*100, y=((e.clientY-box.top)/box.height)*100;
-        if(x>=0&&x<=100&&y>=0&&y<=100){
-          const s:Sticker={id:uid++,emoji:d.emoji,x,y,sz:ri(30,50),rotation:r(-20,20)};
-          setStickers(prev=>[...prev,s]);
-          note(ri(700,1100),0.2,0.16);vib([15,10,15]);
-        }
+  const chequearTroncoMapa = useCallback((e: React.PointerEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const container = target.closest('[data-zona-container]') as HTMLElement | null;
+    if (!container) return;
+    const contRect = container.getBoundingClientRect();
+    const relX = (rect.left + rect.width / 2 - contRect.left) / contRect.width;
+    const relY = (rect.top + rect.height / 2 - contRect.top) / contRect.height;
+    const nativeX = relX * ZONA_WIDTH;
+    const nativeY = relY * ZONA_HEIGHT;
+    const dist = Math.hypot(nativeX - 0.13 * ZONA_WIDTH, nativeY - 0.16 * ZONA_HEIGHT);
+    const RADIO_MAPA = 140; // ajustado al circulo mas chico, ya no se cruza al pasar hacia la Zona 2
+    if (dist < RADIO_MAPA) {
+      const ahora = performance.now();
+      if (mapHoverStartT.current === null) {
+        mapHoverStartT.current = ahora; // recien entra: todavia no abre, evita toques al pasar de largo
+        return;
       }
-      return null;
-    });
-  },[]);
+      if (ahora - mapHoverStartT.current > 400) {
+        abrirMapaConSonido();
+        // El arrastre sigue activo a proposito: el mismo gesto puede continuar hasta
+        // soltar el personaje sobre una zona del mapa (ver chequearThumbnailMapa).
+      }
+    } else {
+      mapHoverStartT.current = null;
+    }
+  }, [abrirMapaConSonido]);
+
+  // Auto-scroll al arrastrar cerca del borde de la pantalla: el fondo se mueve solo
+  // y el personaje se mantiene "pegado" al dedo (se compensa el offset del scroll).
+  const autoScrollDir = useRef<0 | 1 | -1>(0);
+  const autoScrollRAF = useRef<number | null>(null);
+
+  const runAutoScroll = useCallback(() => {
+    const dir = autoScrollDir.current;
+    const el = scrollRef.current;
+    const ds = dragState.current;
+    if (dir !== 0 && el && ds) {
+      const speed = 10; // px por frame, ritmo suave y predecible para 2-5 anios
+      const prevScroll = el.scrollLeft;
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      el.scrollLeft = Math.max(0, Math.min(maxScroll, prevScroll + dir * speed));
+      const aplicado = el.scrollLeft - prevScroll;
+      if (aplicado !== 0) {
+        // Se ajusta la BASE (startX), no el resultado final directamente. Asi, cuando
+        // onDragMove vuelva a calcular la posicion con su propia formula, va a partir
+        // de esta base ya corregida en vez de pisarla -- personaje y fondo quedan sincronizados.
+        ds.startX += aplicado;
+        const dx = ds.lastX - ds.startClientX;
+        const dy = ds.lastY - ds.startClientY;
+        setDragPos(prev => ({ ...prev, [ds.key]: { x: ds.startX + dx, y: ds.startY + dy } }));
+      }
+    }
+    if (dragState.current && autoScrollDir.current !== 0) {
+      autoScrollRAF.current = requestAnimationFrame(runAutoScroll);
+    } else {
+      autoScrollRAF.current = null;
+    }
+  }, []);
+
+  const onDragMove = useCallback((e: React.PointerEvent) => {
+    const ds = dragState.current;
+    if (!ds) return;
+
+    // Con el mapa abierto, el arrastre se usa solo para elegir una zona (gesto continuo).
+    if (showMap) {
+      chequearThumbnailMapa(e);
+      return;
+    }
+
+    const now = performance.now();
+    const dt = Math.max(now - ds.lastT, 1);
+    ds.vx = (e.clientX - ds.lastX) / dt;
+    ds.vy = (e.clientY - ds.lastY) / dt;
+    ds.lastX = e.clientX; ds.lastY = e.clientY; ds.lastT = now;
+    const dx = e.clientX - ds.startClientX;
+    const dy = e.clientY - ds.startClientY;
+    setDragPos(prev => ({ ...prev, [ds.key]: { x: ds.startX + dx, y: ds.startY + dy } }));
+
+    // Sonido de "carrera" mientras se mueve el personaje arrastrado (sintetizado, tipo saltito 8-bit)
+    const movimientoReal = Math.abs(ds.vx) + Math.abs(ds.vy) > 0.03;
+    if (movimientoReal) {
+      const lastRun = lastRunSoundT.current[ds.key] || 0;
+      if (now - lastRun > 150) {
+        lastRunSoundT.current[ds.key] = now;
+        const alto = !runStepAlto.current[ds.key];
+        runStepAlto.current[ds.key] = alto;
+        note(alto ? 520 : 415, 0.09, 0.05, 'square');
+      }
+    }
+
+    const zoneOfKey = parseInt(ds.key.split('-').pop() || '-1', 10);
+
+    // Zona 1 "Puerta de Musgo": rastro de florcitas al pasar bajo el arco
+    if (zoneOfKey === 0) {
+      const lastT = lastTrailT.current[ds.key] || 0;
+      if (now - lastT > 90) {
+        lastTrailT.current[ds.key] = now;
+        const id = ++trailId.current;
+        setTrail(prev => [...prev.slice(-14), { id, x: e.clientX, y: e.clientY }]);
+        setTimeout(() => setTrail(prev => prev.filter(t => t.id !== id)), 750);
+      }
+    }
+
+    // Deteccion en caliente: las luces y puntos tematicos reaccionan al PASAR por encima
+    // mientras se arrastra, sin necesidad de soltar el dedo (mas facil para 2-5 anios).
+    if (zoneOfKey >= 0) {
+      const lastHover = lastHoverCheckT.current[ds.key] || 0;
+      if (now - lastHover > 90) {
+        lastHoverCheckT.current[ds.key] = now;
+        chequearHotspots(zoneOfKey, e);
+        chequearPuntosTematicos(zoneOfKey, ds.key, e);
+        if (!showMap) chequearTroncoMapa(e);
+      }
+    }
+
+    // Auto-scroll de borde: si el dedo esta cerca del borde izquierdo o derecho
+    // de la pantalla, el fondo se desplaza solo mientras dure el arrastre.
+    const EDGE = 64;
+    const vw = window.innerWidth;
+    let dir: 0 | 1 | -1 = 0;
+    if (e.clientX < EDGE) dir = -1;
+    else if (e.clientX > vw - EDGE) dir = 1;
+    autoScrollDir.current = dir;
+    if (dir !== 0 && autoScrollRAF.current === null) {
+      autoScrollRAF.current = requestAnimationFrame(runAutoScroll);
+    }
+  }, [chequearHotspots, chequearPuntosTematicos, chequearTroncoMapa, chequearThumbnailMapa, showMap, runAutoScroll]);
+
+  const endDrag = useCallback((zi: number) => (e: React.PointerEvent) => {
+    const ds = dragState.current;
+    if (!ds) return;
+    const key = ds.key;
+    if (showMap) {
+      // Solto sobre el fondo del mapa (no una miniatura): solo se cierra el gesto,
+      // sin disparar hotspots/reacciones de la zona de origen.
+      setSquash(prev => ({ ...prev, [key]: null }));
+      dragState.current = null;
+      autoScrollDir.current = 0;
+      return;
+    }
+    note(523, 0.18, 0.15);
+    setSquash(prev => ({ ...prev, [key]: 'drop' }));
+    setTimeout(() => setSquash(prev => ({ ...prev, [key]: null })), 220);
+    chequearHotspots(zi, e);
+    chequearReaccion(zi, key, e);
+    coast(key, ds.vx, ds.vy);
+    dragState.current = null;
+    autoScrollDir.current = 0;
+  }, [coast, chequearReaccion, chequearHotspots, showMap]);
+
+  const zonaCompleta = useCallback((zi: number) => {
+    return ZONAS[zi].hotspots.every((_, hi) => collected.has(`${zi}-${hi}`));
+  }, [collected]);
+
+  const progreso = collected.size;
+  const mundoCompleto = progreso === TOTAL_HOTSPOTS;
+  const zonasCompletas = ZONAS.filter((_, zi) => zonaCompleta(zi)).length;
+
+  const intentarPortal = useCallback(() => {
+    if (mundoCompleto) {
+      note(880, 0.4, 0.25); setTimeout(() => note(1046, 0.5, 0.25), 200);
+      hablar('portalListo');
+      setTimeout(() => router.push('/mundo/1'), 500);
+    } else {
+      setPortalNudge(true);
+      note(220, 0.3, 0.2, 'triangle');
+      hablar('portalNoListo');
+      setTimeout(() => setPortalNudge(false), 700);
+    }
+  }, [mundoCompleto, router]);
 
   return (
-    <div ref={worldRef} className="tq-m0-root" onPointerDownCapture={dismissTutorial}
-      style={{width:'100vw',overflow:'hidden',position:'relative',fontFamily:'system-ui,sans-serif',background:'#1a1040'}}>
+    <div style={{ position: 'fixed', inset: 0, background: '#1a1030', overflow: 'hidden', touchAction: 'none', WebkitTapHighlightColor: 'transparent' } as React.CSSProperties}>
+      {/* TOP BAR */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', zIndex: 60, background: 'rgba(20,10,40,.55)', backdropFilter: 'blur(10px)', isolation: 'isolate' }}>
+        <button onClick={() => router.push('/')} style={{ background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.25)', borderRadius: 50, padding: '7px 16px', fontSize: 13, color: 'white', cursor: 'pointer' }}>← Inicio</button>
+        <button onClick={abrirMapaConSonido} style={{ background: 'rgba(255, 200, 90, .18)', border: '1px solid rgba(255,200,90,.5)', borderRadius: 50, padding: '7px 18px', fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+          🗺️ Mapa de Tiqui ({zonasCompletas}/10)
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={() => { setShowLangPicker(true); note(659, 0.15, 0.15); }}
+            aria-label="Elegir idioma"
+            style={{
+              width: 34, height: 34, borderRadius: '50%', border: '1px solid rgba(255,255,255,.25)',
+              background: 'rgba(255,255,255,.12)', fontSize: 16, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >{IDIOMAS_UI.find(o => o.id === idioma)?.flag || '🌐'}</button>
+          <button
+            onClick={() => setMuted(m => !m)}
+            aria-label={muted ? 'Activar voz' : 'Silenciar voz'}
+            style={{ background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.25)', borderRadius: '50%', width: 34, height: 34, fontSize: 15, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >{muted ? '🔇' : '🔊'}</button>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.6)', minWidth: 40, textAlign: 'right' }}>✨{progreso}/{TOTAL_HOTSPOTS}</div>
+        </div>
+      </div>
 
-      {/* Contenedor con scroll horizontal: el mundo se ve a tamaño completo
-          (altura de pantalla) y se desliza de lado a lado para explorarlo,
-          en vez de achicarse para entrar todo de una vez (eso era lo que
-          causaba que todo apareciera amontonado en una franja chiquita). */}
-      <div ref={scrollRef}
-        style={{position:'absolute',inset:0,overflowX:'auto',overflowY:'hidden',
-          display:'flex',WebkitOverflowScrolling:'touch'}}>
-        <div ref={contentRef}
-          style={{position:'relative',height:'100%',aspectRatio:`${IMG_W} / ${IMG_H}`,flexShrink:0,touchAction:'pan-x',isolation:'isolate'}}>
+      {/* SCROLL HORIZONTAL DE ZONAS */}
+      <div
+        ref={scrollRef}
+        className="mundo0-scroll"
+        style={{
+          position: 'absolute', inset: 0, overflowX: 'auto', overflowY: 'hidden',
+          display: 'flex', flexDirection: 'row', WebkitOverflowScrolling: 'touch',
+          touchAction: 'pan-x',
+        }}
+      >
+        {ZONAS.map((zona, zi) => (
+          <div key={zona.indice} data-zona-container style={{ position: 'relative', flex: `0 0 auto`, height: '100%', aspectRatio: `${ZONA_WIDTH} / ${ZONA_HEIGHT}`, animation: rumbleZona === zi ? 'rockRumble .35s ease-in-out' : 'none' }}>
+            <Image
+              src={`/assets/mundo0/${zona.archivo}`}
+              alt={zona.nombre}
+              fill
+              priority={zi < 2}
+              sizes="100vh"
+              style={{ objectFit: 'cover', objectPosition: 'center' }}
+            />
 
-          <img src="/planeta-tiqui-bg.jpg" alt="Planeta Tiqui" draggable={false}
-            style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'fill',pointerEvents:'none',zIndex:0}}/>
+            {/* Circulo del mapa — presente en TODAS las zonas (arriba a la izquierda), para poder
+                abrir el mapa arrastrando al personaje sin importar en que zona este parado. */}
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute', left: '13%', top: '16%', transform: 'translate(-50%,-50%)',
+                width: '11%', aspectRatio: '1/1', borderRadius: '50%', border: '5px solid rgba(255,215,120,.9)',
+                background: 'radial-gradient(circle, rgba(255,215,120,.45), rgba(255,215,120,.08))',
+                boxShadow: '0 0 30px rgba(255,215,120,.6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '4vh',
+                pointerEvents: 'none', zIndex: 22, animation: 'mapPulse 2s ease-in-out infinite',
+              }}
+            >🗺️</div>
 
-          {showZoneDebug && ZONES.map(z=>(
-            <div key={z.id} style={{position:'absolute',left:`${z.x}%`,top:`${z.y}%`,width:`${z.w}%`,height:`${z.h}%`,
-              border:'2px dashed rgba(255,255,255,.8)',background:'rgba(255,0,150,.15)',zIndex:3,pointerEvents:'none',
-              display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <span style={{fontSize:'1.1vh',fontWeight:800,color:'white',background:'rgba(0,0,0,.6)',padding:'2px 6px',borderRadius:6,whiteSpace:'nowrap'}}>{z.name}</span>
-            </div>
-          ))}
-
-          {buildings.map(bld=>{
-            const isGuide = !!neediest && bld.action===neediest.need;
-            return (
-            <div key={bld.id}
-              onPointerDown={e=>onBldDown(e,bld.id)}
-              onPointerMove={e=>onBldMove(e,bld.id)}
-              onPointerUp={e=>onBldUp(e,bld.id)}
-              style={{position:'absolute',left:`${bld.x}%`,top:`${bld.y}%`,
-                fontSize:'4.2vh',lineHeight:1,touchAction:'none',userSelect:'none',
-                zIndex:bld.dragging?80:bld.zIndex+3,
-                cursor:bld.dragging?'grabbing':'grab',
-                transform:`scale(${bld.scale})`,
-                transition:bld.dragging?'none':'transform .15s',
-                filter:isGuide?`drop-shadow(0 0 10px gold) drop-shadow(0 4px 12px ${bld.color}88)`:`drop-shadow(0 4px 12px ${bld.color}88)`,
-                animation:bld.dragging?'none':`objF${bld.id%6} ${3+bld.id*.2}s ease-in-out infinite${isGuide?', guideGlow 1s ease-in-out infinite':''}`,
-                pointerEvents:'auto',
-              }}>{bld.emoji}</div>
-          );})}
-
-          {citizens.map(ch=>{
-            const showBubble = ch.bubbleTimer>Date.now();
-            const critNeed = ch.isMascot ? undefined : (Object.entries(ch.needs) as [Need,number][]).find(([,v])=>v<25);
-            const isGuide = !!neediest && neediest.id===ch.id;
-            return (
-              <div key={ch.id} style={{position:'absolute',left:`${ch.x}%`,top:`${ch.y}%`,zIndex:ch.dragging?90:ch.zIndex,touchAction:'none'}}>
-                {(showBubble||critNeed)&&(
-                  <div style={{position:'absolute',bottom:'108%',left:'50%',transform:'translateX(-50%)',
-                    background:'rgba(255,255,255,.95)',borderRadius:16,padding:'5px 11px',
-                    fontSize:11,fontWeight:700,color:'#111',whiteSpace:'nowrap',
-                    boxShadow:'0 4px 16px rgba(0,0,0,.3)',zIndex:95,pointerEvents:'none',
-                    animation:'bubblePop .3s ease-out'}}>
-                    {showBubble?ch.bubble:`${NEED_ICONS[critNeed![0]]} ¡${NEED_LABEL[critNeed![0]]}!`}
-                    <div style={{position:'absolute',bottom:-6,left:'50%',transform:'translateX(-50%)',
-                      width:0,height:0,borderLeft:'6px solid transparent',borderRight:'6px solid transparent',
-                      borderTop:'7px solid rgba(255,255,255,.95)'}}/>
-                  </div>
-                )}
-                {!ch.isMascot&&(
-                  <div style={{position:'absolute',bottom:'100%',left:'50%',transform:'translateX(-50%)',
-                    display:'flex',gap:2,marginBottom:2,
-                    opacity:selectedCit===ch.id?1:0,transition:'opacity .2s'}}>
-                    {(Object.entries(ch.needs) as [Need,number][]).map(([need,val])=>(
-                      <div key={need} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-                        <div style={{fontSize:7}}>{NEED_ICONS[need]}</div>
-                        <div style={{width:4,height:22,background:'rgba(255,255,255,.2)',borderRadius:2,overflow:'hidden'}}>
-                          <div style={{position:'relative',width:'100%',height:`${val}%`,
-                            background:val>60?'#7CFC00':val>30?'#FFD700':'#FF6B6B',
-                            borderRadius:2,transition:'height .5s',marginTop:'auto'}}/>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+            {zona.hotspots.map((h, hi) => {
+              const key = `${zi}-${hi}`;
+              const done = collected.has(key);
+              const leftPct = (h.x / ZONA_WIDTH) * 100;
+              const topPct = (h.y / ZONA_HEIGHT) * 100;
+              return (
                 <div
-                  onPointerDown={e=>{onCitDown(e,ch.id);setSelectedCit(ch.id);}}
-                  onPointerMove={e=>onCitMove(e,ch.id)}
-                  onPointerUp={e=>onCitUp(e,ch.id)}
-                  style={{cursor:ch.dragging?'grabbing':'grab',userSelect:'none',touchAction:'none',
-                    display:'flex',flexDirection:'column',alignItems:'center',
-                    transform:`scale(${ch.scale})`,transition:'transform .2s',
-                    filter:`drop-shadow(0 0 ${ch.dragging?20:isGuide?18:10}px ${isGuide?'gold':ch.color})`,
-                    animation:(ch.dragging?'none':ch.mood==='happy'?'charHappy .8s ease-in-out infinite alternate':ch.mood==='excited'?'charExcited .4s ease-in-out infinite alternate':ch.mood==='sleepy'?'charSleepy 3s ease-in-out infinite':'charFloat 2.5s ease-in-out infinite alternate')+(isGuide?', guideGlow 1s ease-in-out infinite':''),
-                  }}>
-                  {ch.img ? (
-                    <img src={ch.img} alt={ch.name} draggable={false}
-                      style={{width:'9vh',height:'auto',objectFit:'contain'}}/>
-                  ) : (<>
-                    <div style={{fontSize:'2.6vh',marginBottom:'-1.3vh',position:'relative',zIndex:2}}>{ACC_OPTS[ch.acc]}</div>
-                    <div style={{fontSize:'4.4vh',position:'relative',zIndex:1}}>{ch.emoji}</div>
-                    <div style={{fontSize:'2.6vh',marginTop:'-1.3vh',position:'relative',zIndex:2}}>{SUIT_OPTS[ch.suit]}</div>
-                  </>)}
-                  <div style={{fontSize:'1.4vh',fontWeight:700,color:'white',textShadow:'0 1px 4px rgba(0,0,0,.8)',
-                    background:`${ch.color}44`,borderRadius:8,padding:'1px 6px',marginTop:2,whiteSpace:'nowrap'}}>{ch.name}</div>
+                  key={hi}
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute', left: `${leftPct}%`, top: `${topPct}%`,
+                    transform: 'translate(-50%,-50%)', width: '5%', aspectRatio: '1/1',
+                    pointerEvents: 'none', zIndex: 20,
+                  }}
+                >
+                  <img
+                    src="/assets/mundo0/hotspot_icon_v4.png"
+                    alt=""
+                    style={{
+                      width: '100%', height: '100%', display: done ? 'none' : 'block',
+                      animation: 'hotspotPulse 1.6s ease-in-out infinite',
+                      filter: 'drop-shadow(0 0 8px rgba(180,150,255,.7))',
+                    }}
+                  />
+                </div>
+              );
+            })}
+
+            {/* Luciernaga de ayuda: presente en todas las zonas, toca para saber que falta */}
+            <button
+              onClick={() => pedirAyuda(zi)}
+              aria-label="Pedir ayuda a la luciérnaga guía"
+              style={{
+                position: 'absolute', right: '5%', top: '10%', width: '9%', aspectRatio: '1/1',
+                background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', zIndex: 25,
+              }}
+            >
+              <img
+                src="/assets/mundo0/guia_luciernaga_v4.png"
+                alt="Luciérnaga guía"
+                draggable={false}
+                style={{ width: '100%', animation: 'guideFloat 2.2s ease-in-out infinite', filter: 'drop-shadow(0 0 10px rgba(255,220,120,.6))' }}
+              />
+            </button>
+
+            {/* Companero flotante: el personaje que el nino eligio. Existe en UNA sola zona a la vez
+                (zonaCompanero) — no una copia en cada zona, para que tenga sentido "ir a buscarlo".
+                En la Arboleda los anfitriones fijos rotan automaticamente si coinciden con el
+                personaje elegido, asi que aca no hace falta ninguna exclusion especial. */}
+            {zi === zonaCompanero && (
+              <div style={{ position: 'absolute', left: '6%', bottom: '6%', width: '22%', zIndex: 19, transform: `translate(${dragPos[`${personajeActivo}-${zi}`]?.x || 0}px, ${dragPos[`${personajeActivo}-${zi}`]?.y || 0}px)` }}>
+                <div style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  filter: companionPulseZona === zi ? 'drop-shadow(0 0 18px rgba(255,220,150,.95))' : 'none',
+                  animation: dragState.current?.key === `${personajeActivo}-${zi}`
+                    ? 'none'
+                    : companionPulseZona === zi
+                      ? 'portalReady .5s ease-in-out 3'
+                      : floating[`${personajeActivo}-${zi}`]
+                        ? 'floatWater 2.6s ease-in-out infinite'
+                        : 'charBounce 2.2s ease-in-out infinite .15s',
+                }}>
+                  <img
+                    src={`/assets/mundo0/${PERSONAJE_POR_ID[personajeActivo]?.src || 'char_toqwow_v3.png'}`}
+                    alt={PERSONAJE_POR_ID[personajeActivo]?.nombre || 'Toqwow'}
+                    onPointerDown={startDrag(`${personajeActivo}-${zi}`)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                    draggable={false}
+                    style={{
+                      width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
+                      transform: squashTransform(`${personajeActivo}-${zi}`), transition: 'transform .12s ease-out',
+                      filter: floating[`${personajeActivo}-${zi}`]
+                        ? 'drop-shadow(0 10px 12px rgba(0,0,0,.45)) hue-rotate(-12deg) saturate(1.3)'
+                        : 'drop-shadow(0 10px 12px rgba(0,0,0,.45))',
+                    }} />
+                  <div style={{
+                    fontSize: '1.4vh', fontWeight: 700, color: 'white', textShadow: '0 1px 4px rgba(0,0,0,.8)',
+                    background: companionPulseZona === zi ? 'rgba(255,220,150,.9)' : 'rgba(20,10,40,.6)',
+                    borderRadius: 8, padding: '1px 6px', marginTop: 2,
+                    whiteSpace: 'nowrap', pointerEvents: 'none', transition: 'background .3s',
+                  }}>{PERSONAJE_POR_ID[personajeActivo]?.nombre || 'Toqwow'}</div>
                 </div>
               </div>
-            );
-          })}
+            )}
 
-          {stickers.map(s=>(
-            <div key={s.id} onClick={()=>setStickers(prev=>prev.filter(x=>x.id!==s.id))}
-              style={{position:'absolute',left:`${s.x}%`,top:`${s.y}%`,fontSize:s.sz,lineHeight:1,userSelect:'none',zIndex:8,cursor:'pointer',transform:`rotate(${s.rotation}deg)`}}>{s.emoji}</div>
-          ))}
-
-          {/* Mano tutorial (solo la primera vez): apunta al personaje que
-              más necesita algo, o a ToqWow si todos están bien. Sin texto. */}
-          {showTutorial&&(()=>{
-            const target = neediest ? citizens.find(c=>c.id===neediest.id) : citizens[citizens.length-1];
-            if(!target) return null;
-            return (
-              <div style={{position:'absolute',left:`${target.x}%`,top:`${target.y}%`,
-                transform:'translate(60%,-10%)',fontSize:'6vh',zIndex:96,pointerEvents:'none',
-                filter:'drop-shadow(0 4px 10px rgba(0,0,0,.5))',animation:'tutorialHand 1.1s ease-in-out infinite'}}>👆</div>
-            );
-          })()}
-        </div>
-      </div>
-
-      {/* Partículas: van fuera del contenedor de scroll, en coordenadas
-          reales de pantalla (ya vienen calculadas así desde interact()). */}
-      {particles.map(p=>(
-        <div key={p.id} style={{position:'absolute',left:p.x,top:p.y,fontSize:ri(20,32),pointerEvents:'none',zIndex:100,lineHeight:1,animation:'burstP .9s ease-out forwards'}}>{p.e}</div>
-      ))}
-
-      {showCombo&&(
-        <div style={{position:'absolute',top:'20%',left:'50%',transform:'translateX(-50%)',zIndex:110,textAlign:'center',animation:'comboIn .4s ease-out',pointerEvents:'none'}}>
-          <div style={{fontSize:16,fontWeight:800,color:'white',background:'rgba(0,0,0,.7)',borderRadius:24,padding:'10px 22px',backdropFilter:'blur(14px)',boxShadow:'0 0 40px #B8A9FF88'}}>{comboMsg}</div>
-        </div>
-      )}
-
-      {showCustomize&&selectedCit!==null&&!citizens[selectedCit]?.isMascot&&(
-        <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.82)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(8px)'}}>
-          <div style={{background:'rgba(10,5,30,.96)',borderRadius:24,padding:20,maxWidth:340,width:'90%',border:`1.5px solid ${citizens[selectedCit]?.color||'#B8A9FF'}44`}}>
-            <div style={{fontSize:16,fontWeight:800,color:'white',marginBottom:12,textAlign:'center'}}>✨ Personalizar {citizens[selectedCit]?.name}</div>
-            {(['hair','suit','acc'] as const).map(attr=>(
-              <div key={attr} style={{marginBottom:10}}>
-                <div style={{fontSize:11,color:'rgba(255,255,255,.5)',marginBottom:6}}>{attr==='hair'?'Pelo':attr==='suit'?'Traje':'Accesorio'}</div>
-                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                  {(attr==='hair'?HAIR_OPTS:attr==='suit'?SUIT_OPTS:ACC_OPTS).map((opt,i)=>(
-                    <div key={i} onClick={()=>{setCitizens(prev=>prev.map(c=>c.id===selectedCit?{...c,[attr]:i}:c));note(ri(600,900),0.15,0.15);vib(10);}}
-                      style={{fontSize:22,cursor:'pointer',padding:4,borderRadius:8,
-                        background:citizens[selectedCit]?.[attr]===i?`${citizens[selectedCit].color}33`:'transparent',
-                        border:citizens[selectedCit]?.[attr]===i?`1.5px solid ${citizens[selectedCit].color}`:'1.5px solid transparent',
-                        transition:'all .15s'}}>{opt}</div>
-                  ))}
+            {/* Amigos convocados desde la bandeja, presentes en la zona donde fueron llamados */}
+            {AMIGOS_EXTRA.filter(a => amigosEnJuego[a.id] === zi && !(a.id === personajeActivo && zi === zonaCompanero)).map((amigo, ai) => {
+              const key = `${amigo.id}-${zi}`;
+              return (
+                <div key={amigo.id} style={{
+                  position: 'absolute', left: `${15 + ai * 22}%`, bottom: '8%', width: '20%', zIndex: 16,
+                  transform: `translate(${dragPos[key]?.x || 0}px, ${dragPos[key]?.y || 0}px)`,
+                }}>
+                  <div style={{ animation: dragState.current?.key === key ? 'none' : 'charBounce 2.3s ease-in-out infinite' }}>
+                    <img
+                      src={`/assets/mundo0/${amigo.src}`} alt={amigo.nombre}
+                      onPointerDown={startDrag(key)} onPointerMove={onDragMove} onPointerUp={endDrag(zi)} onPointerCancel={endDrag(zi)}
+                      draggable={false}
+                      style={{
+                        width: '100%', display: 'block', cursor: 'grab', touchAction: 'none',
+                        transform: squashTransform(key), transition: 'transform .12s ease-out',
+                        filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.4))',
+                      }} />
+                  </div>
                 </div>
+              );
+            })}
+
+            {/* Portal en Zona 10: gated por progreso */}
+            {zi === 9 && (
+              <button
+                onClick={intentarPortal}
+                aria-label="Pasar al siguiente mundo"
+                style={{
+                  position: 'absolute', left: '68%', top: '58%', transform: 'translate(-50%,-50%)',
+                  width: '12%', aspectRatio: '1/1', borderRadius: '50%', border: 'none', background: 'transparent',
+                  cursor: 'pointer', zIndex: 21,
+                  filter: mundoCompleto ? 'brightness(1.5) saturate(1.3)' : 'brightness(.55) saturate(.6) grayscale(.3)',
+                  transition: 'filter .4s',
+                  animation: portalNudge ? 'nudgeShake .4s ease-in-out' : mundoCompleto ? 'portalReady 1.8s ease-in-out infinite' : 'none',
+                }}
+              >
+                <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,220,150,.5), rgba(150,100,255,.15))' }} />
+              </button>
+            )}
+
+            {/* Destello de celebracion al completar esta zona */}
+            {zonaCelebrando === zi && (
+              <div style={{
+                position: 'absolute', inset: 0, zIndex: 40, pointerEvents: 'none',
+                background: 'radial-gradient(circle, rgba(255,220,150,.55), rgba(255,220,150,0) 70%)',
+                animation: 'zonaCelebra 1.8s ease-out forwards',
+              }} />
+            )}
+
+            {/* Factor WOW: evento visual mas grande, unico por zona */}
+            {wowZona === zi && (
+              <div style={{ position: 'absolute', inset: 0, zIndex: 45, pointerEvents: 'none', overflow: 'hidden' }}>
+                {zi === 4 ? (
+                  <div style={{ position: 'absolute', inset: 0, animation: 'wowColorCycle 2.4s ease-in-out', mixBlendMode: 'screen' }} />
+                ) : zi === 7 ? (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(180,140,255,.25)', animation: 'wowPulseRings 2.2s ease-out' }} />
+                ) : zi === 9 ? (
+                  <>
+                    {Array.from({ length: 10 }).map((_, i) => (
+                      <div key={i} style={{
+                        position: 'absolute', left: `${45 + (i % 3) * 5}%`, bottom: 0, fontSize: 22,
+                        animation: `wowRise 1.8s ease-out ${i * 0.12}s forwards`, opacity: 0,
+                      }}>✨</div>
+                    ))}
+                    <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle, rgba(255,255,255,.5), rgba(255,255,255,0) 60%)', animation: 'wowFlashWhite 2.4s ease-out' }} />
+                  </>
+                ) : (
+                  <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(circle, ${ZONA_WOW_COLOR[zi] || 'rgba(255,220,150,.5)'}, transparent 65%)`, animation: 'wowExpand 2.2s ease-out' }} />
+                )}
               </div>
+            )}
+
+            {/* Bursts de recompensa */}
+            {bursts.filter(b => b.zonaIdx === zi).map(b => (
+              <div key={b.id} style={{
+                position: 'fixed', left: b.x, top: b.y, transform: 'translate(-50%,-50%)',
+                fontSize: b.tipo === 'splash' ? 44 : b.tipo === 'tema' ? 52 : 34, pointerEvents: 'none', zIndex: 70,
+                animation: b.tipo === 'splash' ? 'splashRing .9s ease-out forwards' : b.tipo === 'tema' ? 'temaCelebra 1.3s ease-out forwards' : 'burstUp .9s ease-out forwards',
+              }}>{b.emoji || (b.tipo === 'splash' ? '💦' : '✨')}</div>
             ))}
-            <button onClick={()=>setShowCustomize(false)}
-              style={{width:'100%',marginTop:8,background:'rgba(255,255,255,.1)',border:'none',borderRadius:12,padding:'10px',color:'white',cursor:'pointer',fontSize:14,fontWeight:700}}>✅ Listo</button>
           </div>
-        </div>
-      )}
-
-      <div style={{position:'absolute',top:0,left:0,right:0,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 12px',zIndex:300,background:'rgba(0,0,0,.4)',backdropFilter:'blur(10px)'}}>
-        <button onClick={()=>router.push('/')} style={{background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',borderRadius:50,padding:'6px 14px',fontSize:12,color:'white',cursor:'pointer'}}>← Inicio</button>
-        <div style={{fontSize:13,fontWeight:700,color:'white',display:'flex',alignItems:'center',gap:6}}>🪐 Planeta Tiqui <span style={{fontSize:11,opacity:.8}}>⭐{stars}</span></div>
-        <div style={{display:'flex',gap:6}}>
-          <button onClick={()=>setShowZoneDebug(v=>!v)} title="Ver zonas (debug)"
-            style={{background:showZoneDebug?'rgba(255,0,150,.3)':'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',borderRadius:50,padding:'6px 10px',fontSize:12,color:'white',cursor:'pointer'}}>🔧</button>
-          <button onClick={()=>{if(selectedCit!==null&&!citizens[selectedCit]?.isMascot)setShowCustomize(true);}}
-            style={{background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',borderRadius:50,padding:'6px 14px',fontSize:12,color:'white',cursor:'pointer',opacity:(selectedCit!==null&&!citizens[selectedCit]?.isMascot)?1:0.4}}>✨</button>
-        </div>
-      </div>
-
-      {/* Puntitos de progreso: uno por cada rincón del mundo (casas,
-          hamaca, puesto de golosinas, etc). Se iluminan al descubrirlos.
-          Sin números ni palabras — solo relleno visual. */}
-      <div style={{position:'absolute',top:42,left:0,right:0,display:'flex',justifyContent:'center',gap:4,zIndex:299,pointerEvents:'none'}}>
-        {ZONES.map(z=>(
-          <div key={z.id} style={{width:7,height:7,borderRadius:'50%',
-            background:visitedZones.has(z.id)?'gold':'rgba(255,255,255,.25)',
-            boxShadow:visitedZones.has(z.id)?'0 0 6px gold':'none',transition:'all .3s'}}/>
         ))}
       </div>
 
-      <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:300,background:'rgba(2,4,20,.94)',backdropFilter:'blur(16px)',borderTop:'1px solid rgba(255,255,255,.1)',padding:'8px 12px calc(10px + env(safe-area-inset-bottom))'}}>
-        {/* Fila de personajes: tocar selecciona + saluda + desliza el mundo
-            hasta ahí. Sin palabras — solo caritas y colores. */}
-        <div style={{display:'flex',gap:7,overflowX:'auto',paddingBottom:7}}>
-          {citizens.map(ch=>{
-            const isGuide = !!neediest && neediest.id===ch.id;
-            return (
-              <div key={ch.id} onClick={()=>onTrayCitTap(ch.id)}
-                style={{background:selectedCit===ch.id?`${ch.color}33`:'rgba(255,255,255,.07)',
-                  border:`1.5px solid ${isGuide?'gold':selectedCit===ch.id?ch.color:'rgba(255,255,255,.15)'}`,
-                  borderRadius:16,padding:'6px 8px',cursor:'pointer',flexShrink:0,minWidth:52,textAlign:'center',
-                  transition:'all .2s',animation:isGuide?'guideGlow 1s ease-in-out infinite':'none'}}>
-                {ch.img ? (
-                  <img src={ch.img} alt={ch.name} style={{width:28,height:28,objectFit:'contain',margin:'0 auto'}}/>
-                ) : (
-                  <div style={{fontSize:24}}>{ch.emoji}</div>
-                )}
-                {!ch.isMascot&&(
-                  <div style={{display:'flex',gap:2,justifyContent:'center',marginTop:4}}>
-                    {(Object.entries(ch.needs) as [Need,number][]).map(([need,val])=>(
-                      <div key={need} style={{width:3,height:12,background:'rgba(255,255,255,.15)',borderRadius:2,overflow:'hidden',position:'relative'}}>
-                        <div style={{position:'absolute',bottom:0,width:'100%',height:`${val}%`,background:val>60?'#7CFC00':val>30?'#FFD700':'#FF6B6B',borderRadius:2,transition:'height .5s'}}/>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+      {/* Rastro de florcitas de musgo (Zona 1, al pasar bajo el arco) */}
+      {trail.map(t => (
+        <div key={t.id} style={{
+          position: 'fixed', left: t.x, top: t.y, transform: 'translate(-50%,-50%)',
+          fontSize: 18, pointerEvents: 'none', zIndex: 65, animation: 'trailFade .75s ease-out forwards',
+        }}>🌼</div>
+      ))}
 
-        {/* Fila de stickers: se arrastran directo desde acá hasta el mundo.
-            Tocar un sticker ya puesto en el mundo lo borra (sin botón
-            "limpiar" que haya que leer). */}
-        <div style={{display:'flex',gap:8,overflowX:'auto'}}>
-          {STICKERS_SET.map((emoji,i)=>(
-            <div key={i}
-              onPointerDown={e=>onStickerTrayDown(e,emoji)}
-              onPointerMove={onStickerTrayMove}
-              onPointerUp={onStickerTrayUp}
-              style={{fontSize:26,flexShrink:0,cursor:'grab',touchAction:'none',userSelect:'none',
-                filter:'drop-shadow(0 2px 6px rgba(255,255,255,.25))'}}>{emoji}</div>
-          ))}
-        </div>
-      </div>
-
-      {/* Sticker siguiendo el dedo mientras se arrastra desde la bandeja */}
-      {dragSticker&&(
-        <div style={{position:'fixed',left:dragSticker.sx,top:dragSticker.sy,transform:'translate(-50%,-50%)',
-          fontSize:40,pointerEvents:'none',zIndex:500,filter:'drop-shadow(0 4px 10px rgba(0,0,0,.4))'}}>{dragSticker.emoji}</div>
-      )}
-
-      {/* Mundo completo: se descubrieron las 9 zonas. Fiesta grande y un
-          único botón sin texto (una flecha) para pasar al Mundo 1. */}
-      {showWorldComplete&&(
-        <div onClick={()=>setShowWorldComplete(false)}
-          style={{position:'absolute',inset:0,zIndex:450,display:'flex',alignItems:'center',justifyContent:'center',
-            background:'rgba(10,5,30,.75)',backdropFilter:'blur(10px)'}}>
-          <div style={{textAlign:'center',animation:'comboIn .5s ease-out'}}>
-            <div style={{fontSize:70,marginBottom:14,animation:'tqHappy .5s ease-in-out 4'}}>🏆✨🎉</div>
-            <button onClick={e=>{e.stopPropagation();router.push('/mundo/1');}}
-              style={{fontSize:42,width:104,height:104,borderRadius:'50%',border:'none',cursor:'pointer',
-                background:'linear-gradient(135deg,#B8A9FF,#FF9ECF)',boxShadow:'0 10px 34px rgba(184,169,255,.6)',
-                animation:'tqFloat 2s ease-in-out infinite'}}>➡️</button>
+      {/* Cartel de instruccion tipo Toca Boca, aparece al entrar a cada zona o al pedir ayuda */}
+      {(cartelZona !== null || cartelAyuda !== null) && (
+        <div style={{
+          position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)', zIndex: 90,
+          maxWidth: '86%', background: 'rgba(255,255,255,.97)', borderRadius: 20,
+          padding: '12px 18px', boxShadow: '0 10px 30px rgba(0,0,0,.35)',
+          display: 'flex', alignItems: 'center', gap: 12, animation: 'cartelIn .4s ease-out',
+        }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(160deg,#ffe9b0,#ffd27a)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0,
+          }}>{cartelAyuda !== null ? '🐝' : (ICONO_ZONA[cartelZona!] || '✨')}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#3a2a1a', lineHeight: 1.35 }}>
+            {cartelAyuda !== null ? cartelAyuda : (FRASES[`zona${cartelZona}`]?.[idioma] || FRASES[`zona${cartelZona}`]?.es)}
           </div>
         </div>
       )}
 
-      {/* Botón flotante permanente una vez desbloqueado el pase, para
-          poder ir al siguiente mundo cuando quiera sin forzar la salida. */}
-      {worldDone&&!showWorldComplete&&(
-        <button onClick={()=>router.push('/mundo/1')} title="Siguiente mundo"
-          style={{position:'absolute',right:14,bottom:150,zIndex:290,
-            fontSize:24,width:52,height:52,borderRadius:'50%',border:'none',cursor:'pointer',
-            background:'linear-gradient(135deg,#B8A9FF,#FF9ECF)',boxShadow:'0 6px 20px rgba(184,169,255,.5)',
-            animation:'tqFloat 2.5s ease-in-out infinite'}}>➡️</button>
+      {/* Bandeja de amigos convocables */}
+      <div style={{
+        position: 'absolute', bottom: 44, left: 0, right: 0, zIndex: 60,
+        display: 'flex', gap: 10, overflowX: 'auto', padding: '6px 14px',
+      }}>
+        {AMIGOS_EXTRA.map(amigo => {
+          const enJuego = amigosEnJuego[amigo.id] !== undefined;
+          const activo = personajeActivo === amigo.id;
+          return (
+            <button
+              key={amigo.id}
+              onClick={() => convocarAmigo(amigo.id)}
+              aria-label={`Convocar a ${amigo.nombre}`}
+              style={{
+                flexShrink: 0, width: 46, height: 46, borderRadius: '50%',
+                border: activo ? '3px solid rgba(255,220,150,1)' : enJuego ? '2px solid rgba(255,220,150,.9)' : '2px solid rgba(255,255,255,.35)',
+                boxShadow: activo ? '0 0 12px rgba(255,220,150,.85)' : 'none',
+                background: 'rgba(20,10,40,.55)', backdropFilter: 'blur(6px)',
+                padding: 4, cursor: 'pointer', opacity: enJuego || activo ? 1 : 0.75,
+              }}
+            >
+              <img src={`/assets/mundo0/${amigo.src}`} alt={amigo.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Indicador de scroll sutil */}
+      <div style={{ position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 60, fontSize: 11, color: 'rgba(255,255,255,.45)', background: 'rgba(20,10,40,.4)', padding: '4px 12px', borderRadius: 20 }}>
+        ⟵ Deslizá para explorar el planeta ⟶
+      </div>
+
+      {/* OVERLAY: Selector de idioma — 10 banderas */}
+      {showLangPicker && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 130, background: 'rgba(10,5,20,.85)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowLangPicker(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: 'rgba(30,15,50,.95)', border: '2px solid rgba(255,255,255,.2)', borderRadius: 24, padding: '22px 20px', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, maxWidth: 320 }}
+          >
+            {IDIOMAS_UI.map(op => (
+              <button
+                key={op.id}
+                onClick={() => { elegirIdioma(op.id); setShowLangPicker(false); }}
+                aria-label={`Idioma ${op.id}`}
+                style={{
+                  width: 48, height: 48, borderRadius: '50%', fontSize: 22, cursor: 'pointer',
+                  border: idioma === op.id ? '3px solid rgba(255,220,150,1)' : '2px solid rgba(255,255,255,.25)',
+                  boxShadow: idioma === op.id ? '0 0 12px rgba(255,220,150,.8)' : 'none',
+                  background: 'rgba(255,255,255,.08)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >{op.flag}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* OVERLAY: Presentacion inicial — Toqwow nombra a los 10 personajes, una sola vez. Sin texto: solo voz + sonido + animacion, igual que el resto del juego. */}
+      {mostrarPresentacion && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(10,5,20,.92)', backdropFilter: 'blur(8px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '5vh 5vw' }}>
+          <div style={{
+            width: 84, height: 84, marginBottom: 24, animation: presentacionIdx === 0 ? 'charBounce 1s ease-in-out infinite' : 'charBounce 2.2s ease-in-out infinite',
+          }}>
+            <img src="/assets/mundo0/char_toqwow_v3.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 0 16px rgba(255,220,150,.7))' }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, maxWidth: 460 }}>
+            {TODOS_PERSONAJES.map((p, i) => {
+              const enFoco = presentacionIdx - 1 === i;
+              const listoParaElegir = presentacionIdx > TODOS_PERSONAJES.length;
+              const yaMostrado = presentacionIdx - 1 > i || listoParaElegir;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => cerrarPresentacion(p.id)}
+                  aria-label={`Elegir a ${p.nombre}`}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    opacity: presentacionIdx === 0 ? 0.5 : (enFoco || yaMostrado ? 1 : 0.4),
+                    transform: enFoco ? 'scale(1.18)' : 'scale(1)',
+                    transition: 'transform .3s ease, opacity .3s ease',
+                    animation: listoParaElegir ? 'charBounce 1.6s ease-in-out infinite' : 'none',
+                    animationDelay: listoParaElegir ? `${i * 0.08}s` : '0s',
+                  }}
+                >
+                  <div style={{
+                    width: 56, height: 56, borderRadius: '50%', padding: 4,
+                    border: enFoco || listoParaElegir ? '3px solid rgba(255,220,150,1)' : '2px solid rgba(255,255,255,.3)',
+                    boxShadow: enFoco || listoParaElegir ? '0 0 16px rgba(255,220,150,.9)' : 'none',
+                  }}>
+                    <img src={`/assets/mundo0/${p.src}`} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 26, display: 'flex', gap: 12 }}>
+            {presentacionIdx > TODOS_PERSONAJES.length ? (
+              <button
+                onClick={() => cerrarPresentacion(personajeActivo)}
+                aria-label="Empezar a jugar"
+                style={{ background: 'rgba(255,220,150,.95)', border: 'none', borderRadius: 50, width: 64, height: 64, fontSize: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'portalReady 1.8s ease-in-out infinite' }}
+              >▶️</button>
+            ) : (
+              <button
+                onClick={() => cerrarPresentacion()}
+                aria-label="Saltar presentacion"
+                style={{ background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.3)', borderRadius: 50, width: 46, height: 46, fontSize: 18, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >⏭️</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* OVERLAY: Mapa de Tiqui */}
+      {showMap && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(10,5,20,.88)', backdropFilter: 'blur(6px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '5vh 4vw' }}>
+          <div style={{
+            background: 'linear-gradient(160deg, #e8d3a3, #d4b878)', borderRadius: 24, padding: '4vh 3vw',
+            maxWidth: 720, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,.5)', border: '4px solid #8a6a3a',
+            maxHeight: '85vh', overflowY: 'auto',
+          }}>
+            <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 700, color: '#4a3418', marginBottom: 6 }}>
+              🗺️ Mapa de Planeta Tiqui
+            </div>
+            <div style={{ textAlign: 'center', fontSize: 13, color: '#6a4f28', marginBottom: 18 }}>
+              Arrastrá a tus amigos hasta cada luz escondida para completar el mapa
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+              {ZONAS.map((zona, zi) => {
+                const completa = zonaCompleta(zi);
+                const parcial = !completa && zona.hotspots.some((_, hi) => collected.has(`${zi}-${hi}`));
+                return (
+                  <button
+                    key={zi}
+                    data-zona-thumb={zi}
+                    onClick={() => irAZona(zi)}
+                    style={{
+                      position: 'relative', border: '3px solid #8a6a3a', borderRadius: 14, padding: 0,
+                      overflow: 'hidden', cursor: 'pointer', aspectRatio: '1/1',
+                      filter: completa ? 'none' : parcial ? 'saturate(.7) brightness(.85)' : 'grayscale(.6) brightness(.6)',
+                    }}
+                  >
+                    <img src={`/assets/mundo0/map/${zona.thumb}`} alt={zona.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    {completa && (
+                      <div style={{ position: 'absolute', top: 2, right: 2, fontSize: 22, filter: 'drop-shadow(0 1px 3px black)' }}>⭐</div>
+                    )}
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, fontSize: 12, fontWeight: 700, textAlign: 'center', color: 'white', background: 'rgba(0,0,0,.55)', padding: '3px 0' }}>{zi + 1}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ textAlign: 'center', marginTop: 18 }}>
+              <button onClick={() => setShowMap(false)} style={{ background: '#8a6a3a', border: 'none', borderRadius: 50, padding: '8px 26px', color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Cerrar</button>
+            </div>
+          </div>
+        </div>
       )}
 
       <style>{`
-        .tq-m0-root{height:100vh;height:100dvh;}
-        @keyframes guideGlow{0%,100%{filter:drop-shadow(0 0 6px gold)}50%{filter:drop-shadow(0 0 20px gold)}}
-        @keyframes tutorialHand{0%,100%{transform:translate(60%,-10%) scale(1)}50%{transform:translate(50%,0%) scale(1.15)}}
-        @keyframes tqFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
-        @keyframes tqHappy{0%{transform:scale(1) rotate(0)}33%{transform:scale(1.22) rotate(10deg)}66%{transform:scale(1.22) rotate(-10deg)}100%{transform:scale(1) rotate(0)}}
-        @keyframes tqDance{0%{transform:rotate(-14deg) scale(1.15)}100%{transform:rotate(14deg) scale(1.15)}}
-        @keyframes charFloat{0%{transform:translateY(0)}100%{transform:translateY(-8px)}}
-        @keyframes charHappy{0%{transform:translateY(0) rotate(-5deg)}100%{transform:translateY(-10px) rotate(5deg)}}
-        @keyframes charExcited{0%{transform:scale(1) rotate(-8deg)}100%{transform:scale(1.1) rotate(8deg)}}
-        @keyframes charSleepy{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(4px) rotate(3deg)}}
-        @keyframes objF0{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
-        @keyframes objF1{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
-        @keyframes objF2{0%,100%{transform:translateX(0)}50%{transform:translateX(5px)}}
-        @keyframes objF3{0%,100%{transform:rotate(0)}50%{transform:rotate(8deg)}}
-        @keyframes objF4{0%,100%{transform:translateY(0) translateX(0)}50%{transform:translateY(-5px) translateX(4px)}}
-        @keyframes objF5{0%,100%{transform:scale(1) rotate(-2deg)}50%{transform:scale(1.05) rotate(2deg)}}
-        @keyframes burstP{0%{opacity:1;transform:scale(.4) translateY(0)}100%{opacity:0;transform:scale(2.5) translateY(-80px)}}
-        @keyframes comboIn{0%{opacity:0;transform:translateX(-50%) scale(.3)}70%{opacity:1;transform:translateX(-50%) scale(1.08)}100%{transform:translateX(-50%) scale(1)}}
-        @keyframes bubblePop{0%{opacity:0;transform:translateX(-50%) scale(.6)}100%{opacity:1;transform:translateX(-50%) scale(1)}}
+        .mundo0-scroll::-webkit-scrollbar { display: none; }
+        .mundo0-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        @keyframes hotspotPulse { 0%,100%{ transform: scale(1); opacity: 1; } 50%{ transform: scale(1.18); opacity: .75; } }
+        @keyframes guideFloat { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-14px); } }
+        @keyframes burstUp { 0%{ opacity: 1; transform: translate(-50%,-50%) scale(.5); } 100%{ opacity: 0; transform: translate(-50%,-160%) scale(1.6); } }
+        @keyframes splashRing { 0%{ opacity: 1; transform: translate(-50%,-50%) scale(.3); } 60%{ opacity: 1; transform: translate(-50%,-50%) scale(1.4); } 100%{ opacity: 0; transform: translate(-50%,-50%) scale(1.9); } }
+        @keyframes temaCelebra { 0%{ opacity: 0; transform: translate(-50%,-50%) scale(.2) rotate(-15deg); } 25%{ opacity: 1; transform: translate(-50%,-50%) scale(1.35) rotate(8deg); } 45%{ transform: translate(-50%,-50%) scale(1.05) rotate(-4deg); } 75%{ opacity: 1; transform: translate(-50%,-65%) scale(1.15) rotate(0deg); } 100%{ opacity: 0; transform: translate(-50%,-140%) scale(1.3); } }
+        @keyframes zonaCelebra { 0%{ opacity: 0; } 25%{ opacity: 1; } 100%{ opacity: 0; } }
+        @keyframes trailFade { 0%{ opacity: .9; transform: translate(-50%,-50%) scale(.6); } 40%{ opacity: .8; transform: translate(-50%,-50%) scale(1); } 100%{ opacity: 0; transform: translate(-50%,-50%) scale(.8) translateY(6px); } }
+        @keyframes rockRumble { 0%,100%{ transform: translateX(0); } 20%{ transform: translateX(-4px) translateY(2px); } 40%{ transform: translateX(4px) translateY(-2px); } 60%{ transform: translateX(-3px); } 80%{ transform: translateX(3px); } }
+        @keyframes cartelIn { 0%{ opacity: 0; transform: translateX(-50%) translateY(-14px) scale(.9); } 100%{ opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
+        @keyframes wowExpand { 0%{ opacity: 0; transform: scale(.3); } 40%{ opacity: 1; transform: scale(1); } 100%{ opacity: 0; transform: scale(1.6); } }
+        @keyframes wowColorCycle { 0%{ background: rgba(0,220,255,.35); } 33%{ background: rgba(180,120,255,.35); } 66%{ background: rgba(255,210,90,.35); } 100%{ background: rgba(0,220,255,0); } }
+        @keyframes wowPulseRings { 0%{ opacity: 0; box-shadow: inset 0 0 0px rgba(180,140,255,.6); } 30%{ opacity: 1; } 100%{ opacity: 0; box-shadow: inset 0 0 140px rgba(180,140,255,0); } }
+        @keyframes wowRise { 0%{ opacity: 0; transform: translateY(0) scale(.6); } 20%{ opacity: 1; } 100%{ opacity: 0; transform: translateY(-320px) scale(1.3); } }
+        @keyframes wowFlashWhite { 0%{ opacity: 0; } 50%{ opacity: 1; } 100%{ opacity: 0; } }
+        @keyframes charBounce { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-6%); } }
+        @keyframes floatWater { 0%,100%{ transform: translateY(0) rotate(-3deg); } 50%{ transform: translateY(-4%) rotate(3deg); } }
+        @keyframes mapPulse { 0%,100%{ transform: translate(-50%,-50%) scale(1); } 50%{ transform: translate(-50%,-50%) scale(1.1); } }
+        @keyframes portalReady { 0%,100%{ transform: scale(1); } 50%{ transform: scale(1.08); } }
+        @keyframes nudgeShake { 0%,100%{ transform: translate(-50%,-50%) rotate(0); } 25%{ transform: translate(-50%,-50%) rotate(-6deg); } 75%{ transform: translate(-50%,-50%) rotate(6deg); } }
+        html, body { height: 100dvh; overscroll-behavior: none; }
+        button, img { -webkit-tap-highlight-color: transparent; outline: none; -webkit-touch-callout: none; user-select: none; -webkit-user-drag: none; user-drag: none; -webkit-appearance: none; appearance: none; }
+        button:focus, img:focus { outline: none; }
       `}</style>
     </div>
   );
