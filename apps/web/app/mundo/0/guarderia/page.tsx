@@ -14,53 +14,63 @@ const vib = (p: number | number[]) => { try { (navigator as any).vibrate?.(p); }
 
 const BASE = '/assets/planeta-tiqui/guarderia';
 
-// ---- Todos los items del cuarto son movibles. Cada uno tiene posicion inicial, tamaño,
-//      y (opcional) sonido/emoji para cuando se lo TOCA sin arrastrar. ----
-type Item = { id: string; src: string; x: number; y: number; w: number; z: number; sonido?: number[]; emoji?: string; esMueble?: boolean };
+// ---- OBJETIVO: 3 muebles principales que el nino debe encastrar en su lugar correcto.
+//      Empiezan en una bandeja abajo; hay un contorno fantasma marcando donde van. ----
+type Mueble = { id: string; src: string; nombre: string; metaX: number; metaY: number; w: number };
+const MUEBLES: Mueble[] = [
+  { id: 'cuna', src: 'cuna_nube.png', nombre: 'Cuna', metaX: 16, metaY: 34, w: 16 },
+  { id: 'banera', src: 'banera_burbuja.png', nombre: 'Bañera', metaX: 52, metaY: 40, w: 15 },
+  { id: 'ropero', src: 'ropero_capsula.png', nombre: 'Ropero', metaX: 80, metaY: 36, w: 14 },
+];
 
-const ITEMS_INICIALES: Item[] = [
-  // Alfombras, van al fondo
-  { id: 'alfombra_cohete', src: 'alfombra_cohete.png', x: 33, y: 86, w: 22, z: 2 },
-  { id: 'alfombra_estrellas', src: 'alfombra_estrellas.png', x: 62, y: 88, w: 20, z: 2 },
-  // Muebles grandes (cuna y bañera ademas son zonas de reaccion para el personaje)
-  { id: 'cuna', src: 'cuna_nube.png', x: 16, y: 34, w: 16, z: 5, esMueble: true },
-  { id: 'banera', src: 'banera_burbuja.png', x: 52, y: 40, w: 15, z: 5, esMueble: true },
-  { id: 'ropero', src: 'ropero_capsula.png', x: 80, y: 36, w: 14, z: 5, esMueble: true },
-  { id: 'taburete', src: 'taburete.png', x: 63, y: 54, w: 10, z: 5, sonido: [440, 523], emoji: '🪑' },
-  // Props chicos, todos tocables Y arrastrables
-  { id: 'movil', src: 'movil_planetas.png', x: 20, y: 10, w: 13, z: 6, sonido: [784, 880, 988], emoji: '✨' },
-  { id: 'espejo', src: 'espejo_cristal.png', x: 8, y: 30, w: 11, z: 6, sonido: [659, 784], emoji: '💎' },
-  { id: 'estrella', src: 'luz_estrella.png', x: 88, y: 14, w: 9, z: 6, sonido: [880, 1046], emoji: '⭐' },
-  { id: 'planeta', src: 'planeta_decor.png', x: 90, y: 32, w: 10, z: 6, sonido: [523, 659, 784], emoji: '🪐' },
-  { id: 'cristal', src: 'cristal_cluster.png', x: 38, y: 46, w: 9, z: 6, sonido: [988, 1174], emoji: '💠' },
-  { id: 'planta', src: 'planta_alien.png', x: 12, y: 56, w: 12, z: 6, sonido: [392, 440], emoji: '🌱' },
-  { id: 'cesto', src: 'cesto_juguetes.png', x: 27, y: 68, w: 14, z: 6, sonido: [349, 392, 440], emoji: '🧸' },
-  { id: 'torre', src: 'torre_bloques.png', x: 46, y: 70, w: 9, z: 6, sonido: [261, 329, 392], emoji: '🧱' },
-  { id: 'peluche', src: 'peluche_alien.png', x: 58, y: 74, w: 10, z: 6, sonido: [587, 659, 523], emoji: '💜' },
-  { id: 'lampara', src: 'lampara_orbe.png', x: 74, y: 64, w: 9, z: 6, sonido: [698, 880], emoji: '🔆' },
-  // Botellas: tocarlas tambien suena, pero su gracia es arrastrarlas hasta el personaje para "alimentarlo"
-  { id: 'botella1', src: 'botella_leche_1.png', x: 22, y: 48, w: 8, z: 6, sonido: [523, 587], emoji: '🍼' },
-  { id: 'botella2', src: 'botella_leche_2.png', x: 34, y: 50, w: 7, z: 6, sonido: [523, 587], emoji: '🍼' },
+// ---- DECORACION LIBRE: props chicos, sin objetivo, se acomodan donde el nino quiera ----
+type Item = { id: string; src: string; x: number; y: number; w: number; sonido: number[]; emoji: string };
+const DECOR_INICIAL: Item[] = [
+  { id: 'alfombra_cohete', src: 'alfombra_cohete.png', x: 33, y: 86, w: 22, sonido: [349, 392], emoji: '🚀' },
+  { id: 'alfombra_estrellas', src: 'alfombra_estrellas.png', x: 62, y: 88, w: 20, sonido: [523, 587], emoji: '⭐' },
+  { id: 'taburete', src: 'taburete.png', x: 63, y: 54, w: 10, sonido: [440, 523], emoji: '🪑' },
+  { id: 'movil', src: 'movil_planetas.png', x: 20, y: 10, w: 13, sonido: [784, 880, 988], emoji: '✨' },
+  { id: 'espejo', src: 'espejo_cristal.png', x: 8, y: 30, w: 11, sonido: [659, 784], emoji: '💎' },
+  { id: 'estrella', src: 'luz_estrella.png', x: 88, y: 14, w: 9, sonido: [880, 1046], emoji: '⭐' },
+  { id: 'planeta', src: 'planeta_decor.png', x: 90, y: 32, w: 10, sonido: [523, 659, 784], emoji: '🪐' },
+  { id: 'cristal', src: 'cristal_cluster.png', x: 38, y: 46, w: 9, sonido: [988, 1174], emoji: '💠' },
+  { id: 'planta', src: 'planta_alien.png', x: 12, y: 56, w: 12, sonido: [392, 440], emoji: '🌱' },
+  { id: 'cesto', src: 'cesto_juguetes.png', x: 27, y: 68, w: 14, sonido: [349, 392, 440], emoji: '🧸' },
+  { id: 'torre', src: 'torre_bloques.png', x: 46, y: 70, w: 9, sonido: [261, 329, 392], emoji: '🧱' },
+  { id: 'peluche', src: 'peluche_alien.png', x: 58, y: 74, w: 10, sonido: [587, 659, 523], emoji: '💜' },
+  { id: 'lampara', src: 'lampara_orbe.png', x: 74, y: 64, w: 9, sonido: [698, 880], emoji: '🔆' },
+  { id: 'botella1', src: 'botella_leche_1.png', x: 22, y: 48, w: 8, sonido: [523, 587], emoji: '🍼' },
+  { id: 'botella2', src: 'botella_leche_2.png', x: 34, y: 50, w: 7, sonido: [523, 587], emoji: '🍼' },
 ];
 
 const CUNA_ZONA = { x: 16, y: 34, w: 16 };
 const BANERA_ZONA = { x: 52, y: 40, w: 15 };
+const TOLERANCIA = 10; // % de distancia para considerar "bien encastrado"
 
 type Burst = { id: number; x: number; y: number; emoji: string };
-type Arrastrando = { id: string; startClientX: number; startClientY: number; offsetX: number; offsetY: number; movido: boolean };
+type MueblePos = { x: number; y: number; colocado: boolean };
+type Arrastrando = { tipo: 'mueble' | 'decor'; id: string; startClientX: number; startClientY: number; offsetX: number; offsetY: number; movido: boolean };
 
 export default function GuarderiaPage() {
   const router = useRouter();
-  const [items, setItems] = useState<Item[]>(ITEMS_INICIALES);
-  const [charPos, setCharPos] = useState({ x: 45, y: 60 });
+
+  // posicion de bandeja inicial para los 3 muebles (fila abajo, se van sacando de ahi)
+  const [muebles, setMuebles] = useState<Record<string, MueblePos>>(
+    Object.fromEntries(MUEBLES.map((m, i) => [m.id, { x: 20 + i * 30, y: 95, colocado: false }]))
+  );
+  const [decor, setDecor] = useState<Item[]>(DECOR_INICIAL);
+  const [charPos, setCharPos] = useState({ x: 45, y: 62 });
   const [charDragging, setCharDragging] = useState(false);
   const [reaction, setReaction] = useState<'none' | 'dormir' | 'banar' | 'comer'>('none');
   const [bursts, setBursts] = useState<Burst[]>([]);
   const [bounceId, setBounceId] = useState<string | null>(null);
+  const [celebracion, setCelebracion] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const burstIdRef = useRef(0);
   const arrastre = useRef<Arrastrando | null>(null);
   const charOffset = useRef({ x: 0, y: 0 });
+
+  const todosColocados = MUEBLES.every(m => muebles[m.id].colocado);
 
   const lanzarBurst = useCallback((xPct: number, yPct: number, emoji: string) => {
     const id = burstIdRef.current++;
@@ -71,15 +81,29 @@ export default function GuarderiaPage() {
   const dentroDeZona = (x: number, y: number, zona: { x: number; y: number; w: number }) =>
     Math.abs(x - (zona.x + zona.w / 2)) < zona.w * 0.7 && Math.abs(y - zona.y) < 14;
 
-  // ---- Arrastre de items del cuarto (muebles y props): distingue toque de arrastre por distancia recorrida ----
-  const onItemPointerDown = (item: Item) => (e: React.PointerEvent) => {
+  // ---- Arrastre de muebles-objetivo ----
+  const onMueblePointerDown = (m: Mueble) => (e: React.PointerEvent) => {
+    if (muebles[m.id].colocado) return;
+    e.stopPropagation();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const pos = muebles[m.id];
+    arrastre.current = {
+      tipo: 'mueble', id: m.id, startClientX: e.clientX, startClientY: e.clientY,
+      offsetX: pos.x - ((e.clientX - rect.left) / rect.width) * 100,
+      offsetY: pos.y - ((e.clientY - rect.top) / rect.height) * 100,
+      movido: false,
+    };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  // ---- Arrastre de decoracion libre ----
+  const onDecorPointerDown = (item: Item) => (e: React.PointerEvent) => {
     e.stopPropagation();
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     arrastre.current = {
-      id: item.id,
-      startClientX: e.clientX,
-      startClientY: e.clientY,
+      tipo: 'decor', id: item.id, startClientX: e.clientX, startClientY: e.clientY,
       offsetX: item.x - ((e.clientX - rect.left) / rect.width) * 100,
       offsetY: item.y - ((e.clientY - rect.top) / rect.height) * 100,
       movido: false,
@@ -102,7 +126,11 @@ export default function GuarderiaPage() {
     if (dist > 6) a.movido = true;
     const xPct = ((e.clientX - rect.left) / rect.width) * 100 + a.offsetX;
     const yPct = ((e.clientY - rect.top) / rect.height) * 100 + a.offsetY;
-    setItems(prev => prev.map(it => it.id === a.id ? { ...it, x: Math.max(3, Math.min(97, xPct)), y: Math.max(4, Math.min(96, yPct)) } : it));
+    if (a.tipo === 'mueble') {
+      setMuebles(prev => ({ ...prev, [a.id]: { ...prev[a.id], x: Math.max(3, Math.min(97, xPct)), y: Math.max(4, Math.min(97, yPct)) } }));
+    } else {
+      setDecor(prev => prev.map(it => it.id === a.id ? { ...it, x: Math.max(3, Math.min(97, xPct)), y: Math.max(4, Math.min(96, yPct)) } : it));
+    }
   };
 
   const onContainerPointerUp = () => {
@@ -126,21 +154,39 @@ export default function GuarderiaPage() {
     const a = arrastre.current;
     arrastre.current = null;
     if (!a) return;
-    const item = items.find(it => it.id === a.id);
-    if (!item) return;
 
-    if (!a.movido) {
-      // fue un toque, no un arrastre: reacciona con sonido si el item tiene
-      if (item.sonido) {
-        setBounceId(item.id);
-        setTimeout(() => setBounceId(null), 260);
-        melody(item.sonido, 90, 0.22, 0.16);
-        vib(15);
-        if (item.emoji) lanzarBurst(item.x, item.y - item.w * 0.3, item.emoji);
+    if (a.tipo === 'mueble') {
+      const meta = MUEBLES.find(m => m.id === a.id)!;
+      const pos = muebles[a.id];
+      const cerca = Math.hypot(pos.x - meta.metaX, pos.y - meta.metaY) < TOLERANCIA;
+      if (cerca) {
+        setMuebles(prev => ({ ...prev, [a.id]: { x: meta.metaX, y: meta.metaY, colocado: true } }));
+        melody([523, 659, 784, 1046], 90, 0.3, 0.22);
+        vib([15, 10, 15]);
+        lanzarBurst(meta.metaX, meta.metaY - meta.w * 0.4, '✅');
+        setTimeout(() => {
+          const yaEstan = MUEBLES.filter(mm => mm.id !== a.id).every(mm => muebles[mm.id].colocado);
+          if (yaEstan) {
+            setCelebracion(true);
+            melody([523, 659, 784, 1046, 1318], 130, 0.4, 0.22);
+            vib([20, 30, 20, 30, 40]);
+          }
+        }, 50);
       }
       return;
     }
-    // fue un arrastre: si es una botella y quedo cerca del personaje, alimenta y vuelve a su lugar
+
+    // decoracion libre: toque vs arrastre
+    const item = decor.find(it => it.id === a.id);
+    if (!item) return;
+    if (!a.movido) {
+      setBounceId(item.id);
+      setTimeout(() => setBounceId(null), 260);
+      melody(item.sonido, 90, 0.22, 0.16);
+      vib(15);
+      lanzarBurst(item.x, item.y - item.w * 0.3, item.emoji);
+      return;
+    }
     if (item.id.startsWith('botella')) {
       const cerca = Math.abs(item.x - charPos.x) < 12 && Math.abs(item.y - charPos.y) < 16;
       if (cerca) {
@@ -149,8 +195,8 @@ export default function GuarderiaPage() {
         vib(20);
         lanzarBurst(charPos.x, charPos.y - 6, '💜');
         setTimeout(() => setReaction('none'), 1400);
-        const original = ITEMS_INICIALES.find(it => it.id === item.id)!;
-        setItems(prev => prev.map(it => it.id === item.id ? { ...it, x: original.x, y: original.y } : it));
+        const original = DECOR_INICIAL.find(it => it.id === item.id)!;
+        setDecor(prev => prev.map(it => it.id === item.id ? { ...it, x: original.x, y: original.y } : it));
       }
     }
   };
@@ -175,6 +221,17 @@ export default function GuarderiaPage() {
         style={{ position: 'absolute', top: 12, left: 12, zIndex: 50, width: 40, height: 40, borderRadius: '50%', background: 'rgba(20,10,40,.7)', color: 'white', border: 'none', fontSize: 18 }}
       >←</button>
 
+      {/* Progreso: 3 circulos que se van tildando a medida que se coloca cada mueble */}
+      <div style={{ position: 'absolute', top: 12, left: 62, zIndex: 50, display: 'flex', gap: 8 }}>
+        {MUEBLES.map(m => (
+          <div key={m.id} style={{
+            width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: muebles[m.id].colocado ? 'rgba(90,220,150,.9)' : 'rgba(20,10,40,.7)',
+            border: '2px solid rgba(255,255,255,.6)', fontSize: 16, transition: 'background .3s',
+          }}>{muebles[m.id].colocado ? '✅' : ''}</div>
+        ))}
+      </div>
+
       <div
         ref={containerRef}
         onPointerMove={onContainerPointerMove}
@@ -184,23 +241,44 @@ export default function GuarderiaPage() {
       >
         <Image src={`${BASE}/fondo.webp`} alt="Guardería Alienígena" fill priority style={{ objectFit: 'cover' }} />
 
-        {items.map(item => (
+        {/* Contorno fantasma: muestra donde va cada mueble hasta que se coloca bien */}
+        {MUEBLES.map(m => !muebles[m.id].colocado && (
+          <img key={`ghost-${m.id}`} src={`${BASE}/${m.src}`} alt="" draggable={false}
+            style={{
+              position: 'absolute', left: `${m.metaX}%`, top: `${m.metaY}%`, width: `${m.w}%`,
+              transform: 'translate(-50%,-50%)', opacity: 0.28, filter: 'grayscale(1) brightness(1.6)',
+              zIndex: 3, pointerEvents: 'none',
+            }} />
+        ))}
+
+        {/* Decoracion libre */}
+        {decor.map(item => (
           <img key={item.id} src={`${BASE}/${item.src}`} alt="" draggable={false}
-            onPointerDown={onItemPointerDown(item)}
+            onPointerDown={onDecorPointerDown(item)}
             style={{
               position: 'absolute', left: `${item.x}%`, top: `${item.y}%`, width: `${item.w}%`,
               transform: `translate(-50%,-50%) scale(${bounceId === item.id ? 1.18 : 1})`,
               transition: arrastre.current?.id === item.id ? 'none' : 'transform .18s cubic-bezier(.34,1.56,.64,1)',
-              cursor: 'grab', zIndex: item.z, touchAction: 'none',
-              filter: item.id === 'cuna' && reaction === 'dormir'
-                ? 'drop-shadow(0 0 20px rgba(150,220,255,.9))'
-                : item.id === 'banera' && reaction === 'banar'
-                  ? 'drop-shadow(0 0 20px rgba(150,255,220,.9))'
-                  : 'drop-shadow(0 5px 7px rgba(0,0,0,.4))',
+              cursor: 'grab', zIndex: 6, touchAction: 'none',
+              filter: 'drop-shadow(0 4px 6px rgba(0,0,0,.35))',
             }} />
         ))}
 
-        {/* Burbujas cuando reaction === 'banar' */}
+        {/* Muebles objetivo (empiezan en la bandeja de abajo) */}
+        {MUEBLES.map(m => (
+          <img key={m.id} src={`${BASE}/${m.src}`} alt={m.nombre} draggable={false}
+            onPointerDown={onMueblePointerDown(m)}
+            style={{
+              position: 'absolute', left: `${muebles[m.id].x}%`, top: `${muebles[m.id].y}%`, width: `${m.w}%`,
+              transform: 'translate(-50%,-50%)',
+              transition: arrastre.current?.id === m.id ? 'none' : 'left .25s ease-out, top .25s ease-out',
+              cursor: muebles[m.id].colocado ? 'default' : 'grab', zIndex: muebles[m.id].colocado ? 5 : 25, touchAction: 'none',
+              filter: (m.id === 'cuna' && reaction === 'dormir') ? 'drop-shadow(0 0 20px rgba(150,220,255,.9))'
+                : (m.id === 'banera' && reaction === 'banar') ? 'drop-shadow(0 0 20px rgba(150,255,220,.9))'
+                : 'drop-shadow(0 6px 8px rgba(0,0,0,.4))',
+            }} />
+        ))}
+
         {reaction === 'banar' && Array.from({ length: 10 }).map((_, i) => (
           <div key={i} style={{
             position: 'absolute', left: `${BANERA_ZONA.x + (Math.random() * 10 - 5)}%`, top: `${BANERA_ZONA.y}%`,
@@ -212,7 +290,6 @@ export default function GuarderiaPage() {
           <div style={{ position: 'absolute', left: `${CUNA_ZONA.x + 10}%`, top: `${CUNA_ZONA.y - 8}%`, fontSize: 24, animation: 'flotarZzz 2s ease-in-out infinite', zIndex: 7, pointerEvents: 'none' }}>💤</div>
         )}
 
-        {/* Personaje arrastrable, con reacciones especiales al soltarlo en la cuna/bañera */}
         <img
           src="/assets/mundo1/char_toqwow_v3.png"
           alt="Personaje"
@@ -234,12 +311,28 @@ export default function GuarderiaPage() {
             animation: 'burstFloat .9s ease-out forwards', zIndex: 30, pointerEvents: 'none',
           }}>{b.emoji}</div>
         ))}
+
+        {celebracion && (
+          <div style={{
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 60, background: 'rgba(20,10,40,.35)',
+          }} onPointerDown={() => setCelebracion(false)}>
+            <div style={{
+              background: 'rgba(255,255,255,.95)', borderRadius: 24, padding: '28px 36px', textAlign: 'center',
+              animation: 'popIn .4s cubic-bezier(.34,1.56,.64,1)',
+            }}>
+              <div style={{ fontSize: 48 }}>🎉✨🎉</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#4a2f7a', marginTop: 8 }}>¡La Guardería está lista!</div>
+            </div>
+          </div>
+        )}
       </div>
 
       <style jsx global>{`
         @keyframes burstFloat { 0%{ transform: translate(-50%,-50%) scale(.4); opacity: 1; } 40%{ transform: translate(-50%,-150%) scale(1.3); opacity: 1;} 100%{ transform: translate(-50%,-220%) scale(1); opacity: 0; } }
         @keyframes subirBurbuja { 0%{ transform: translateY(0) scale(.6); opacity: .9; } 100%{ transform: translateY(-90px) scale(1.1); opacity: 0; } }
         @keyframes flotarZzz { 0%,100%{ transform: translateY(0); opacity: .85; } 50%{ transform: translateY(-10px); opacity: 1; } }
+        @keyframes popIn { 0%{ transform: scale(.5); opacity: 0; } 100%{ transform: scale(1); opacity: 1; } }
       `}</style>
     </div>
   );
