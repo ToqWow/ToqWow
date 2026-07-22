@@ -232,13 +232,14 @@ export default function GuarderiaPage() {
         ))}
       </div>
 
-      <div
-        ref={containerRef}
-        onPointerMove={onContainerPointerMove}
-        onPointerUp={onContainerPointerUp}
-        onPointerCancel={onContainerPointerUp}
-        style={{ position: 'relative', width: '100%', height: '100%' }}
-      >
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div
+          ref={containerRef}
+          onPointerMove={onContainerPointerMove}
+          onPointerUp={onContainerPointerUp}
+          onPointerCancel={onContainerPointerUp}
+          style={{ position: 'relative', width: '100%', height: '100%', maxWidth: 'calc(100vh * 1.793)', maxHeight: 'calc(100vw / 1.793)', aspectRatio: '1.793' }}
+        >
         <Image src={`${BASE}/fondo.webp`} alt="Guardería Alienígena" fill priority style={{ objectFit: 'cover' }} />
 
         {/* Contorno fantasma: muestra donde va cada mueble hasta que se coloca bien */}
@@ -326,6 +327,7 @@ export default function GuarderiaPage() {
             </div>
           </div>
         )}
+      </div>
       </div>
 
       <style jsx global>{`
