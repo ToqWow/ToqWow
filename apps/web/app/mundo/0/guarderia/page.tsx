@@ -29,8 +29,13 @@ const PROPS: Prop[] = [
   { id: 'peluche', src: 'peluche_alien.png', x: 58, y: 74, w: 10, sonido: [587, 659, 523], emoji: '💜' },
   { id: 'lampara', src: 'lampara_orbe.png', x: 74, y: 64, w: 9, sonido: [698, 880], emoji: '🔆' },
   { id: 'taburete', src: 'taburete.png', x: 63, y: 54, w: 10, sonido: [440, 523], emoji: '🪑' },
-  { id: 'botella1', src: 'botella_leche_1.png', x: 22, y: 48, w: 7, sonido: [523, 587], emoji: '🍼' },
-  { id: 'botella2', src: 'botella_leche_2.png', x: 34, y: 50, w: 6, sonido: [523, 587], emoji: '🍼' },
+];
+
+// ---- Botellas: se arrastran (no se tocan) y si se sueltan sobre el personaje, lo "alimentan" ----
+type Botella = { id: string; src: string; homeX: number; homeY: number; w: number };
+const BOTELLAS: Botella[] = [
+  { id: 'botella1', src: 'botella_leche_1.png', homeX: 22, homeY: 48, w: 8 },
+  { id: 'botella2', src: 'botella_leche_2.png', homeX: 34, homeY: 50, w: 7 },
 ];
 
 // ---- Alfombras: van pegadas al piso, no reaccionan a sonido especial, solo decorativas + tocables ----
@@ -52,7 +57,11 @@ export default function GuarderiaPage() {
   const [bounceId, setBounceId] = useState<string | null>(null);
   const [charPos, setCharPos] = useState({ x: 45, y: 60 });
   const [dragging, setDragging] = useState(false);
-  const [reaction, setReaction] = useState<'none' | 'dormir' | 'banar'>('none');
+  const [reaction, setReaction] = useState<'none' | 'dormir' | 'banar' | 'comer'>('none');
+  const [botellaPos, setBotellaPos] = useState<Record<string, { x: number; y: number }>>(
+    Object.fromEntries(BOTELLAS.map(b => [b.id, { x: b.homeX, y: b.homeY }]))
+  );
+  const [draggingBotella, setDraggingBotella] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const burstIdRef = useRef(0);
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -88,30 +97,64 @@ export default function GuarderiaPage() {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragging) return;
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const xPct = ((e.clientX - rect.left) / rect.width) * 100 + dragOffset.current.x;
     const yPct = ((e.clientY - rect.top) / rect.height) * 100 + dragOffset.current.y;
-    setCharPos({ x: Math.max(4, Math.min(96, xPct)), y: Math.max(15, Math.min(92, yPct)) });
+    if (dragging) {
+      setCharPos({ x: Math.max(4, Math.min(96, xPct)), y: Math.max(15, Math.min(92, yPct)) });
+    } else if (draggingBotella) {
+      setBotellaPos(prev => ({ ...prev, [draggingBotella]: { x: Math.max(4, Math.min(96, xPct)), y: Math.max(10, Math.min(94, yPct)) } }));
+    }
   };
 
   const onPointerUp = () => {
-    if (!dragging) return;
-    setDragging(false);
-    if (dentroDeZona(charPos.x, charPos.y, CUNA)) {
-      setReaction('dormir');
-      melody([523, 440, 349, 261], 220, 0.6, 0.12);
-      vib([20, 40, 20]);
-      setCharPos({ x: CUNA.x + CUNA.w / 2, y: CUNA.y + 4 });
-      setTimeout(() => setReaction('none'), 3000);
-    } else if (dentroDeZona(charPos.x, charPos.y, BANERA)) {
-      setReaction('banar');
-      melody([880, 988, 1046, 1174], 90, 0.25, 0.2);
-      vib(15);
-      setCharPos({ x: BANERA.x + BANERA.w / 2, y: BANERA.y + 5 });
-      setTimeout(() => setReaction('none'), 3000);
+    if (dragging) {
+      setDragging(false);
+      if (dentroDeZona(charPos.x, charPos.y, CUNA)) {
+        setReaction('dormir');
+        melody([523, 440, 349, 261], 220, 0.6, 0.12);
+        vib([20, 40, 20]);
+        setCharPos({ x: CUNA.x + CUNA.w / 2, y: CUNA.y + 4 });
+        setTimeout(() => setReaction('none'), 3000);
+      } else if (dentroDeZona(charPos.x, charPos.y, BANERA)) {
+        setReaction('banar');
+        melody([880, 988, 1046, 1174], 90, 0.25, 0.2);
+        vib(15);
+        setCharPos({ x: BANERA.x + BANERA.w / 2, y: BANERA.y + 5 });
+        setTimeout(() => setReaction('none'), 3000);
+      }
+      return;
     }
+    if (draggingBotella) {
+      const id = draggingBotella;
+      const pos = botellaPos[id];
+      const cerca = Math.abs(pos.x - charPos.x) < 12 && Math.abs(pos.y - charPos.y) < 16;
+      setDraggingBotella(null);
+      if (cerca) {
+        setReaction('comer');
+        melody([392, 440, 523, 659], 110, 0.3, 0.18);
+        vib(20);
+        lanzarBurst(charPos.x, charPos.y - 6, '💜');
+        setTimeout(() => setReaction('none'), 1400);
+      }
+      // la botella siempre vuelve a su lugar
+      const home = BOTELLAS.find(b => b.id === id)!;
+      setBotellaPos(prev => ({ ...prev, [id]: { x: home.homeX, y: home.homeY } }));
+    }
+  };
+
+  const onPointerDownBotella = (id: string) => (e: React.PointerEvent) => {
+    e.stopPropagation();
+    setDraggingBotella(id);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const pos = botellaPos[id];
+    dragOffset.current = {
+      x: pos.x - ((e.clientX - rect.left) / rect.width) * 100,
+      y: pos.y - ((e.clientY - rect.top) / rect.height) * 100,
+    };
   };
 
   return (
@@ -152,7 +195,7 @@ export default function GuarderiaPage() {
             style={{
               position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, width: `${p.w}%`,
               transform: `translate(-50%,-50%) scale(${bounceId === p.id ? 1.18 : 1})`,
-              transition: 'transform .18s cubic-bezier(.34,1.56,.64,1)', cursor: 'pointer', zIndex: 6,
+              transition: 'transform .18s cubic-bezier(.34,1.56,.64,1)', cursor: 'pointer', zIndex: 6, touchAction: 'none',
               filter: 'drop-shadow(0 4px 6px rgba(0,0,0,.35))',
             }} />
         ))}
@@ -169,6 +212,19 @@ export default function GuarderiaPage() {
           <div style={{ position: 'absolute', left: `${CUNA.x + 10}%`, top: `${CUNA.y - 8}%`, fontSize: 24, animation: 'flotarZzz 2s ease-in-out infinite', zIndex: 7, pointerEvents: 'none' }}>💤</div>
         )}
 
+        {/* Botellas arrastrables: soltar sobre el personaje = alimentarlo */}
+        {BOTELLAS.map(b => (
+          <img key={b.id} src={`${BASE}/${b.src}`} alt="" draggable={false}
+            onPointerDown={onPointerDownBotella(b.id)}
+            style={{
+              position: 'absolute', left: `${botellaPos[b.id].x}%`, top: `${botellaPos[b.id].y}%`, width: `${b.w}%`,
+              transform: `translate(-50%,-50%) scale(${draggingBotella === b.id ? 1.15 : 1})`,
+              transition: draggingBotella === b.id ? 'none' : 'left .25s ease-out, top .25s ease-out, transform .2s ease-out',
+              cursor: draggingBotella === b.id ? 'grabbing' : 'grab', zIndex: 15,
+              filter: 'drop-shadow(0 4px 6px rgba(0,0,0,.35))', touchAction: 'none',
+            }} />
+        ))}
+
         {/* Personaje arrastrable */}
         <img
           src="/assets/mundo1/char_toqwow_v3.png"
@@ -176,11 +232,11 @@ export default function GuarderiaPage() {
           draggable={false}
           onPointerDown={onPointerDown}
           style={{
-            position: 'absolute', left: `${charPos.x}%`, top: `${charPos.y}%`, width: '12%',
-            transform: `translate(-50%,-50%) scale(${dragging ? 1.1 : 1}) ${reaction === 'dormir' ? 'rotate(90deg) scale(.8)' : ''}`,
+            position: 'absolute', left: `${charPos.x}%`, top: `${charPos.y}%`, width: '20%',
+            transform: `translate(-50%,-50%) scale(${dragging || reaction === 'comer' ? 1.12 : 1}) ${reaction === 'dormir' ? 'rotate(90deg) scale(.8)' : ''}`,
             transition: dragging ? 'none' : 'transform .25s ease-out, left .2s ease-out, top .2s ease-out',
-            cursor: dragging ? 'grabbing' : 'grab', zIndex: 20,
-            filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.45))',
+            cursor: dragging ? 'grabbing' : 'grab', zIndex: 20, touchAction: 'none',
+            filter: reaction === 'comer' ? 'drop-shadow(0 0 18px rgba(200,150,255,.9))' : 'drop-shadow(0 8px 10px rgba(0,0,0,.45))',
             opacity: reaction === 'dormir' ? 0.85 : 1,
           }}
         />
