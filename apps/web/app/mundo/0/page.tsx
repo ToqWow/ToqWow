@@ -1019,6 +1019,9 @@ export default function Mundo0() {
         <button onClick={abrirMapaConSonido} style={{ background: 'rgba(255, 200, 90, .18)', border: '1px solid rgba(255,200,90,.5)', borderRadius: 50, padding: '7px 18px', fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
           🗺️ Mapa de Tiqui ({zonasCompletas}/10)
         </button>
+        <button onClick={() => router.push('/mundo/0/guarderia')} style={{ background: 'rgba(180,140,255,.22)', border: '1px solid rgba(180,140,255,.55)', borderRadius: 50, padding: '7px 16px', fontSize: 13, fontWeight: 700, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+          🍼 Guardería
+        </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
             onClick={() => { setShowLangPicker(true); note(659, 0.15, 0.15); }}
