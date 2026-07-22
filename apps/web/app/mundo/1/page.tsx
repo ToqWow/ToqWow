@@ -394,7 +394,7 @@ export default function Mundo1() {
     { id: 'luta', src: 'char_luta.png', nombre: 'Luta' },
     { id: 'copo', src: 'char_copo.png', nombre: 'Copo de Nieve' },
     { id: 'vago', src: 'char_vago_v2.png', nombre: 'Vago' },
-    { id: 'michi', src: 'char_michi_v2.png', nombre: 'Michi' },
+    { id: 'michi', src: 'char_michi_v3.png', nombre: 'Michi' },
   ];
   // Roster completo (10) para la presentacion inicial y referencia general
   const TODOS_PERSONAJES = [
