@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
@@ -13,7 +13,6 @@ const melody = (fs: number[], gap = 100, d = 0.3, v = 0.18) => fs.forEach((f, i)
 const vib = (p: number | number[]) => { try { (navigator as any).vibrate?.(p); } catch {} };
 
 const BASE = '/assets/planeta-tiqui/guarderia';
-const RATIO = 1.793; // ancho/alto del fondo (2200x1227)
 
 // ---- OBJETIVO: solo 6 piezas para colocar (ideal 2-6 años, poca carga). Arrancan en bandeja
 //      con contorno fantasma en su lugar; encastran con sonido al soltarlas cerca. ----
@@ -30,18 +29,18 @@ const OBJETOS: Objeto[] = [
 // ---- DECORACION AMBIENTE: ya estan en su lugar desde el principio, solo se tocan (sonido/particula) ----
 type Decor = { id: string; src: string; x: number; y: number; w: number; sonido: number[]; emoji: string };
 const DECOR: Decor[] = [
-  { id: 'alfombra_cohete', src: 'alfombra_cohete.png', x: 33, y: 86, w: 22, sonido: [349, 392], emoji: '🚀' },
-  { id: 'alfombra_estrellas', src: 'alfombra_estrellas.png', x: 62, y: 88, w: 20, sonido: [523, 587], emoji: '⭐' },
-  { id: 'movil', src: 'movil_planetas.png', x: 20, y: 10, w: 13, sonido: [784, 880, 988], emoji: '✨' },
-  { id: 'espejo', src: 'espejo_cristal.png', x: 8, y: 30, w: 11, sonido: [659, 784], emoji: '💎' },
-  { id: 'estrella', src: 'luz_estrella.png', x: 88, y: 14, w: 9, sonido: [880, 1046], emoji: '⭐' },
-  { id: 'planeta', src: 'planeta_decor.png', x: 90, y: 32, w: 10, sonido: [523, 659, 784], emoji: '🪐' },
-  { id: 'cristal', src: 'cristal_cluster.png', x: 38, y: 46, w: 9, sonido: [988, 1174], emoji: '💠' },
-  { id: 'torre', src: 'torre_bloques.png', x: 46, y: 70, w: 9, sonido: [261, 329, 392], emoji: '🧱' },
-  { id: 'peluche', src: 'peluche_alien.png', x: 58, y: 74, w: 10, sonido: [587, 659, 523], emoji: '💜' },
-  { id: 'lampara', src: 'lampara_orbe.png', x: 74, y: 64, w: 9, sonido: [698, 880], emoji: '🔆' },
-  { id: 'botella1', src: 'botella_leche_1.png', x: 22, y: 48, w: 8, sonido: [523, 587], emoji: '🍼' },
-  { id: 'botella2', src: 'botella_leche_2.png', x: 34, y: 50, w: 7, sonido: [523, 587], emoji: '🍼' },
+  { id: 'alfombra_cohete', src: 'alfombra_cohete.png', x: 33, y: 86, w: 18, sonido: [349, 392], emoji: '🚀' },
+  { id: 'alfombra_estrellas', src: 'alfombra_estrellas.png', x: 62, y: 88, w: 16, sonido: [523, 587], emoji: '⭐' },
+  { id: 'movil', src: 'movil_planetas.png', x: 20, y: 10, w: 11, sonido: [784, 880, 988], emoji: '✨' },
+  { id: 'espejo', src: 'espejo_cristal.png', x: 8, y: 30, w: 9, sonido: [659, 784], emoji: '💎' },
+  { id: 'estrella', src: 'luz_estrella.png', x: 88, y: 14, w: 7, sonido: [880, 1046], emoji: '⭐' },
+  { id: 'planeta', src: 'planeta_decor.png', x: 90, y: 32, w: 8, sonido: [523, 659, 784], emoji: '🪐' },
+  { id: 'cristal', src: 'cristal_cluster.png', x: 38, y: 46, w: 7, sonido: [988, 1174], emoji: '💠' },
+  { id: 'torre', src: 'torre_bloques.png', x: 46, y: 70, w: 7, sonido: [261, 329, 392], emoji: '🧱' },
+  { id: 'peluche', src: 'peluche_alien.png', x: 58, y: 74, w: 8, sonido: [587, 659, 523], emoji: '💜' },
+  { id: 'lampara', src: 'lampara_orbe.png', x: 74, y: 64, w: 7, sonido: [698, 880], emoji: '🔆' },
+  { id: 'botella1', src: 'botella_leche_1.png', x: 22, y: 48, w: 6, sonido: [523, 587], emoji: '🍼' },
+  { id: 'botella2', src: 'botella_leche_2.png', x: 34, y: 50, w: 5, sonido: [523, 587], emoji: '🍼' },
 ];
 
 const posicionBandeja = (i: number, total: number): { x: number; y: number } => {
@@ -57,34 +56,13 @@ type Burst = { id: number; x: number; y: number; emoji: string };
 type Pos = { x: number; y: number; colocado: boolean };
 type Arrastrando = { id: string; startClientX: number; startClientY: number; offsetX: number; offsetY: number; movido: boolean };
 
-// ---- Hook: mide el espacio disponible y calcula el tamaño del escenario (ancho x alto)
-//      manteniendo el aspect-ratio del fondo, para que nunca se recorte en ninguna orientacion ----
-function useStageSize() {
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  useEffect(() => {
-    const calc = () => {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      let w = vw, h = vw / RATIO;
-      if (h > vh) { h = vh; w = vh * RATIO; }
-      setSize({ w, h });
-    };
-    calc();
-    window.addEventListener('resize', calc);
-    window.addEventListener('orientationchange', calc);
-    return () => { window.removeEventListener('resize', calc); window.removeEventListener('orientationchange', calc); };
-  }, []);
-  return size;
-}
-
 export default function GuarderiaPage() {
   const router = useRouter();
-  const stage = useStageSize();
 
   const [pos, setPos] = useState<Record<string, Pos>>(
     Object.fromEntries(OBJETOS.map((o, i) => [o.id, { ...posicionBandeja(i, OBJETOS.length), colocado: false }]))
   );
-  const [charPos, setCharPos] = useState({ x: 45, y: 62 });
+  const [charPos, setCharPos] = useState({ x: 68, y: 80 });
   const [charDragging, setCharDragging] = useState(false);
   const [reaction, setReaction] = useState<'none' | 'dormir' | 'banar'>('none');
   const [bursts, setBursts] = useState<Burst[]>([]);
@@ -216,16 +194,15 @@ export default function GuarderiaPage() {
         {colocados}/{OBJETOS.length} ✨
       </div>
 
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {stage.w > 0 && (
+      <div style={{ position: 'absolute', inset: 0 }}>
           <div
             ref={containerRef}
             onPointerMove={onContainerPointerMove}
             onPointerUp={onContainerPointerUp}
             onPointerCancel={onContainerPointerUp}
-            style={{ position: 'relative', width: stage.w, height: stage.h }}
+            style={{ position: 'relative', width: '100%', height: '100%' }}
           >
-            <Image src={`${BASE}/fondo.webp`} alt="Guardería Alienígena" fill priority style={{ objectFit: 'cover' }} />
+            <Image src={`${BASE}/fondo.webp`} alt="Guardería Alienígena" fill priority style={{ objectFit: 'cover', objectPosition: 'center' }} />
 
             {/* Contornos fantasma de los 6 objetos a colocar */}
             {OBJETOS.map(o => !pos[o.id].colocado && (
@@ -314,7 +291,6 @@ export default function GuarderiaPage() {
               </div>
             )}
           </div>
-        )}
       </div>
 
       <style jsx global>{`
