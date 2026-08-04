@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
@@ -18,74 +18,58 @@ const BASE = '/assets/planeta-tiqui/guarderia';
 //      con contorno fantasma en su lugar; encastran con sonido al soltarlas cerca. ----
 type Objeto = { id: string; src: string; nombre: string; metaX: number; metaY: number; w: number; sonido: number[]; emoji: string };
 const OBJETOS: Objeto[] = [
-  { id: 'cuna', src: 'cuna_nube.png', nombre: 'Cuna', metaX: 16, metaY: 34, w: 16, sonido: [523, 659, 784, 1046], emoji: '✅' },
-  { id: 'banera', src: 'banera_burbuja.png', nombre: 'Bañera', metaX: 52, metaY: 40, w: 15, sonido: [523, 659, 784, 1046], emoji: '✅' },
-  { id: 'ropero', src: 'ropero_capsula.png', nombre: 'Ropero', metaX: 80, metaY: 36, w: 14, sonido: [523, 659, 784, 1046], emoji: '✅' },
-  { id: 'taburete', src: 'taburete.png', nombre: 'Taburete', metaX: 63, metaY: 54, w: 10, sonido: [440, 523], emoji: '🪑' },
-  { id: 'cesto', src: 'cesto_juguetes.png', nombre: 'Cesto', metaX: 27, metaY: 68, w: 14, sonido: [349, 392, 440], emoji: '🧸' },
-  { id: 'planta', src: 'planta_alien.png', nombre: 'Planta', metaX: 12, metaY: 56, w: 12, sonido: [392, 440], emoji: '🌱' },
+  { id: 'cuna', src: 'cuna_nube.png', nombre: 'Cuna', metaX: 25.52, metaY: 36.89, w: 11.52, sonido: [523, 659, 784, 1046], emoji: '✅' },
+  { id: 'banera', src: 'banera_burbuja.png', nombre: 'Bañera', metaX: 51.44, metaY: 41.8, w: 10.8, sonido: [523, 659, 784, 1046], emoji: '✅' },
+  { id: 'ropero', src: 'ropero_capsula.png', nombre: 'Ropero', metaX: 71.6, metaY: 38.53, w: 10.08, sonido: [523, 659, 784, 1046], emoji: '✅' },
+  { id: 'taburete', src: 'taburete.png', nombre: 'Taburete', metaX: 59.36, metaY: 53.28, w: 7.2, sonido: [440, 523], emoji: '🪑' },
+  { id: 'cesto', src: 'cesto_juguetes.png', nombre: 'Cesto', metaX: 33.44, metaY: 64.75, w: 10.08, sonido: [349, 392, 440], emoji: '🧸' },
+  { id: 'planta', src: 'planta_alien.png', nombre: 'Planta', metaX: 22.64, metaY: 54.92, w: 8.64, sonido: [392, 440], emoji: '🌱' },
 ];
 
 // ---- DECORACION AMBIENTE: ya estan en su lugar desde el principio, solo se tocan (sonido/particula) ----
 type Decor = { id: string; src: string; x: number; y: number; w: number; sonido: number[]; emoji: string };
 const DECOR: Decor[] = [
-  { id: 'alfombra_cohete', src: 'alfombra_cohete.png', x: 33, y: 86, w: 18, sonido: [349, 392], emoji: '🚀' },
-  { id: 'alfombra_estrellas', src: 'alfombra_estrellas.png', x: 62, y: 88, w: 16, sonido: [523, 587], emoji: '⭐' },
-  { id: 'movil', src: 'movil_planetas.png', x: 20, y: 13, w: 11, sonido: [784, 880, 988], emoji: '✨' },
-  { id: 'espejo', src: 'espejo_cristal.png', x: 8, y: 30, w: 9, sonido: [659, 784], emoji: '💎' },
-  { id: 'estrella', src: 'luz_estrella.png', x: 88, y: 14, w: 7, sonido: [880, 1046], emoji: '⭐' },
-  { id: 'planeta', src: 'planeta_decor.png', x: 90, y: 32, w: 8, sonido: [523, 659, 784], emoji: '🪐' },
-  { id: 'cristal', src: 'cristal_cluster.png', x: 38, y: 46, w: 7, sonido: [988, 1174], emoji: '💠' },
-  { id: 'torre', src: 'torre_bloques.png', x: 46, y: 70, w: 7, sonido: [261, 329, 392], emoji: '🧱' },
-  { id: 'peluche', src: 'peluche_alien.png', x: 58, y: 74, w: 8, sonido: [587, 659, 523], emoji: '💜' },
-  { id: 'lampara', src: 'lampara_orbe.png', x: 74, y: 64, w: 7, sonido: [698, 880], emoji: '🔆' },
-  { id: 'botella1', src: 'botella_leche_1.png', x: 22, y: 48, w: 6, sonido: [523, 587], emoji: '🍼' },
-  { id: 'botella2', src: 'botella_leche_2.png', x: 34, y: 50, w: 5, sonido: [523, 587], emoji: '🍼' },
+  { id: 'alfombra_cohete', src: 'alfombra_cohete.png', x: 37.76, y: 79.51, w: 12.96, sonido: [349, 392], emoji: '🚀' },
+  { id: 'alfombra_estrellas', src: 'alfombra_estrellas.png', x: 58.64, y: 81.15, w: 11.52, sonido: [523, 587], emoji: '⭐' },
+  { id: 'movil', src: 'movil_planetas.png', x: 28.4, y: 19.67, w: 7.92, sonido: [784, 880, 988], emoji: '✨' },
+  { id: 'espejo', src: 'espejo_cristal.png', x: 19.76, y: 33.61, w: 6.48, sonido: [659, 784], emoji: '💎' },
+  { id: 'estrella', src: 'luz_estrella.png', x: 77.36, y: 20.49, w: 5.04, sonido: [880, 1046], emoji: '⭐' },
+  { id: 'planeta', src: 'planeta_decor.png', x: 78.8, y: 35.25, w: 5.76, sonido: [523, 659, 784], emoji: '🪐' },
+  { id: 'cristal', src: 'cristal_cluster.png', x: 41.36, y: 46.72, w: 5.04, sonido: [988, 1174], emoji: '💠' },
+  { id: 'torre', src: 'torre_bloques.png', x: 47.12, y: 66.39, w: 5.04, sonido: [261, 329, 392], emoji: '🧱' },
+  { id: 'peluche', src: 'peluche_alien.png', x: 55.76, y: 69.67, w: 5.76, sonido: [587, 659, 523], emoji: '💜' },
+  { id: 'lampara', src: 'lampara_orbe.png', x: 67.28, y: 61.47, w: 5.04, sonido: [698, 880], emoji: '🔆' },
+  { id: 'botella1', src: 'botella_leche_1.png', x: 29.84, y: 48.36, w: 4.32, sonido: [523, 587], emoji: '🍼' },
+  { id: 'botella2', src: 'botella_leche_2.png', x: 38.48, y: 50.0, w: 3.6, sonido: [523, 587], emoji: '🍼' },
 ];
 
+// Bandeja inferior: reparte los 6 objetos dentro de la franja horizontal visible del cuarto
+// (14%-86% del ancho del lienzo extendido), a la altura y=82 (dentro de zona segura, nunca se corta)
+const TRAY_LEFT = 16, TRAY_RIGHT = 84, TRAY_Y = 82;
 const posicionBandeja = (i: number, total: number): { x: number; y: number } => {
-  const espacio = 96 / (total + 1);
-  return { x: espacio * (i + 1), y: 89 };
+  const espacio = (TRAY_RIGHT - TRAY_LEFT) / (total + 1);
+  return { x: TRAY_LEFT + espacio * (i + 1), y: TRAY_Y };
 };
 
-const CUNA_ZONA = { x: 16, y: 34, w: 16 };
-const BANERA_ZONA = { x: 52, y: 40, w: 15 };
-const TOLERANCIA = 10;
-const RATIO = 1.793; // ancho/alto del fondo (2200x1227)
+const CUNA_ZONA = { x: 25.52, y: 36.89, w: 11.52 };
+const BANERA_ZONA = { x: 51.44, y: 41.8, w: 10.8 };
+const TOLERANCIA = 7.5;
+
+// Proporcion del fondo extendido (3056x1497 = 2.0414). Ya no se usa en JS: el fondo
+// va siempre a pantalla completa (`cover`); el margen extra pintado en el lienzo
+// absorbe el recorte sin tocar nunca los objetos reales.
 
 type Burst = { id: number; x: number; y: number; emoji: string };
 type Pos = { x: number; y: number; colocado: boolean };
 type Arrastrando = { id: string; startClientX: number; startClientY: number; offsetX: number; offsetY: number; movido: boolean };
 
-// Ajusta el escenario al espacio disponible manteniendo SIEMPRE la proporcion del fondo,
-// para que nunca se recorte ningun objeto (ahora que la escena esta fija en horizontal,
-// el margen sobrante, si lo hay, es minimo).
-function useStageSize() {
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  useEffect(() => {
-    const calc = () => {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      let w = vw, h = vw / RATIO;
-      if (h > vh) { h = vh; w = vh * RATIO; }
-      setSize({ w, h });
-    };
-    calc();
-    window.addEventListener('resize', calc);
-    window.addEventListener('orientationchange', calc);
-    return () => { window.removeEventListener('resize', calc); window.removeEventListener('orientationchange', calc); };
-  }, []);
-  return size;
-}
-
 export default function GuarderiaPage() {
   const router = useRouter();
-  const stage = useStageSize();
 
   const [pos, setPos] = useState<Record<string, Pos>>(
     Object.fromEntries(OBJETOS.map((o, i) => [o.id, { ...posicionBandeja(i, OBJETOS.length), colocado: false }]))
   );
-  const [charPos, setCharPos] = useState({ x: 68, y: 80 });
+  const [charPos, setCharPos] = useState({ x: 62.96, y: 74.59 });
   const [charDragging, setCharDragging] = useState(false);
   const [reaction, setReaction] = useState<'none' | 'dormir' | 'banar'>('none');
   const [bursts, setBursts] = useState<Burst[]>([]);
@@ -224,14 +208,13 @@ export default function GuarderiaPage() {
         {colocados}/{OBJETOS.length} ✨
       </div>
 
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {stage.w > 0 && (
+      <div style={{ position: 'absolute', inset: 0 }}>
           <div
             ref={containerRef}
             onPointerMove={onContainerPointerMove}
             onPointerUp={onContainerPointerUp}
             onPointerCancel={onContainerPointerUp}
-            style={{ position: 'relative', width: stage.w, height: stage.h }}
+            style={{ position: 'relative', width: '100%', height: '100%' }}
           >
             <Image src={`${BASE}/fondo.webp`} alt="Guardería Alienígena" fill priority style={{ objectFit: 'cover', objectPosition: 'center' }} />
 
@@ -322,7 +305,6 @@ export default function GuarderiaPage() {
               </div>
             )}
           </div>
-        )}
       </div>
       </div>
 
