@@ -31,7 +31,7 @@ type Decor = { id: string; src: string; x: number; y: number; w: number; sonido:
 const DECOR: Decor[] = [
   { id: 'alfombra_cohete', src: 'alfombra_cohete.png', x: 33, y: 86, w: 18, sonido: [349, 392], emoji: '🚀' },
   { id: 'alfombra_estrellas', src: 'alfombra_estrellas.png', x: 62, y: 88, w: 16, sonido: [523, 587], emoji: '⭐' },
-  { id: 'movil', src: 'movil_planetas.png', x: 20, y: 10, w: 11, sonido: [784, 880, 988], emoji: '✨' },
+  { id: 'movil', src: 'movil_planetas.png', x: 20, y: 13, w: 11, sonido: [784, 880, 988], emoji: '✨' },
   { id: 'espejo', src: 'espejo_cristal.png', x: 8, y: 30, w: 9, sonido: [659, 784], emoji: '💎' },
   { id: 'estrella', src: 'luz_estrella.png', x: 88, y: 14, w: 7, sonido: [880, 1046], emoji: '⭐' },
   { id: 'planeta', src: 'planeta_decor.png', x: 90, y: 32, w: 8, sonido: [523, 659, 784], emoji: '🪐' },
@@ -45,7 +45,7 @@ const DECOR: Decor[] = [
 
 const posicionBandeja = (i: number, total: number): { x: number; y: number } => {
   const espacio = 96 / (total + 1);
-  return { x: espacio * (i + 1), y: 94 };
+  return { x: espacio * (i + 1), y: 89 };
 };
 
 const CUNA_ZONA = { x: 16, y: 34, w: 16 };
@@ -185,6 +185,13 @@ export default function GuarderiaPage() {
 
   return (
     <div style={{ width: '100vw', height: '100dvh', overflow: 'hidden', background: '#0d0620', position: 'relative', touchAction: 'none' }}>
+      <div className="rotate-overlay">
+        <div className="rotate-icon">📱</div>
+        <div className="rotate-text">¡Girá tu celular para jugar!</div>
+        <button className="rotate-back" onClick={() => router.push('/mundo/0')}>← Volver</button>
+      </div>
+
+      <div className="guarderia-landscape">
       <button
         onClick={() => router.push('/mundo/0')}
         style={{ position: 'absolute', top: 10, left: 10, zIndex: 50, width: 38, height: 38, borderRadius: '50%', background: 'rgba(20,10,40,.75)', color: 'white', border: 'none', fontSize: 18 }}
@@ -292,12 +299,33 @@ export default function GuarderiaPage() {
             )}
           </div>
       </div>
+      </div>
 
       <style jsx global>{`
         @keyframes burstFloat { 0%{ transform: translate(-50%,-50%) scale(.4); opacity: 1; } 40%{ transform: translate(-50%,-150%) scale(1.3); opacity: 1;} 100%{ transform: translate(-50%,-220%) scale(1); opacity: 0; } }
         @keyframes subirBurbuja { 0%{ transform: translateY(0) scale(.6); opacity: .9; } 100%{ transform: translateY(-90px) scale(1.1); opacity: 0; } }
         @keyframes flotarZzz { 0%,100%{ transform: translateY(0); opacity: .85; } 50%{ transform: translateY(-10px); opacity: 1; } }
         @keyframes popIn { 0%{ transform: scale(.5); opacity: 0; } 100%{ transform: scale(1); opacity: 1; } }
+        @keyframes rotarTelefono { 0%,100%{ transform: rotate(0deg); } 50%{ transform: rotate(-90deg); } }
+
+        .rotate-overlay {
+          display: none;
+          position: fixed; inset: 0; z-index: 100;
+          flex-direction: column; align-items: center; justify-content: center;
+          background: #0d0620; color: white; text-align: center; padding: 24px;
+        }
+        .rotate-icon { font-size: 64px; animation: rotarTelefono 1.8s ease-in-out infinite; }
+        .rotate-text { font-size: 18px; font-weight: 700; margin-top: 18px; max-width: 260px; }
+        .rotate-back {
+          margin-top: 28px; background: rgba(255,255,255,.12); color: white; border: 2px solid rgba(255,255,255,.35);
+          border-radius: 20px; padding: 8px 20px; font-size: 14px; font-weight: 600;
+        }
+        .guarderia-landscape { position: absolute; inset: 0; }
+
+        @media (orientation: portrait) {
+          .guarderia-landscape { display: none; }
+          .rotate-overlay { display: flex; }
+        }
       `}</style>
     </div>
   );
