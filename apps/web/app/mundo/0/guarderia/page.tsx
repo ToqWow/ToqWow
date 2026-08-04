@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
@@ -51,13 +51,36 @@ const posicionBandeja = (i: number, total: number): { x: number; y: number } => 
 const CUNA_ZONA = { x: 16, y: 34, w: 16 };
 const BANERA_ZONA = { x: 52, y: 40, w: 15 };
 const TOLERANCIA = 10;
+const RATIO = 1.793; // ancho/alto del fondo (2200x1227)
 
 type Burst = { id: number; x: number; y: number; emoji: string };
 type Pos = { x: number; y: number; colocado: boolean };
 type Arrastrando = { id: string; startClientX: number; startClientY: number; offsetX: number; offsetY: number; movido: boolean };
 
+// Ajusta el escenario al espacio disponible manteniendo SIEMPRE la proporcion del fondo,
+// para que nunca se recorte ningun objeto (ahora que la escena esta fija en horizontal,
+// el margen sobrante, si lo hay, es minimo).
+function useStageSize() {
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const calc = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let w = vw, h = vw / RATIO;
+      if (h > vh) { h = vh; w = vh * RATIO; }
+      setSize({ w, h });
+    };
+    calc();
+    window.addEventListener('resize', calc);
+    window.addEventListener('orientationchange', calc);
+    return () => { window.removeEventListener('resize', calc); window.removeEventListener('orientationchange', calc); };
+  }, []);
+  return size;
+}
+
 export default function GuarderiaPage() {
   const router = useRouter();
+  const stage = useStageSize();
 
   const [pos, setPos] = useState<Record<string, Pos>>(
     Object.fromEntries(OBJETOS.map((o, i) => [o.id, { ...posicionBandeja(i, OBJETOS.length), colocado: false }]))
@@ -201,13 +224,14 @@ export default function GuarderiaPage() {
         {colocados}/{OBJETOS.length} ✨
       </div>
 
-      <div style={{ position: 'absolute', inset: 0 }}>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {stage.w > 0 && (
           <div
             ref={containerRef}
             onPointerMove={onContainerPointerMove}
             onPointerUp={onContainerPointerUp}
             onPointerCancel={onContainerPointerUp}
-            style={{ position: 'relative', width: '100%', height: '100%' }}
+            style={{ position: 'relative', width: stage.w, height: stage.h }}
           >
             <Image src={`${BASE}/fondo.webp`} alt="Guardería Alienígena" fill priority style={{ objectFit: 'cover', objectPosition: 'center' }} />
 
@@ -298,6 +322,7 @@ export default function GuarderiaPage() {
               </div>
             )}
           </div>
+        )}
       </div>
       </div>
 
