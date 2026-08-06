@@ -18,40 +18,38 @@ const BG = '/assets/redesign/aldea/fondo.webp';
 // Elenco 3D claymation, compartido por las 5 zonas nuevas del rediseño:
 const CHAR_BASE = '/assets/redesign/personajes';
 
-// NOTA PARA LA PRÓXIMA SESIÓN:
-// Estas carpetas todavía no existen en el repo — hay que subir ahí los PNG/WEBP
-// generados en OpenArt (fondo de la Aldea + los 10 char_<id>.png del elenco 3D)
-// para que esta pantalla se vea con el arte real. El código ya está listo para
-// consumirlos apenas estén los archivos.
+// NOTA: falta subir char_toqwow.png (los otros 9 personajes ya están) — hasta
+// entonces Toqwow no se va a ver en la plaza.
 
 type Personaje = {
   id: string; nombre: string; archivo: string; tipo: 'biped' | 'cuadrupedo';
   w: number; x: number; y: number; sonido: number[];
 };
 
-// Posiciones iniciales dispersas por la plaza (ajustar % cuando se vea el fondo real)
+// Posiciones iniciales dispersas por la plaza central de piedra (ajustadas mirando
+// el fondo real: la plaza vacía queda aprox entre 40-70% x / 45-62% y)
 const PERSONAJES: Personaje[] = [
-  { id: 'toqwow', nombre: 'Toqwow', archivo: 'char_toqwow.png', tipo: 'biped', w: 16, x: 50, y: 62, sonido: [523, 659, 784] },
-  { id: 'tizi', nombre: 'Tizi', archivo: 'char_tizi.png', tipo: 'biped', w: 13, x: 22, y: 58, sonido: [659, 784, 988] },
-  { id: 'zoe', nombre: 'Zoe', archivo: 'char_zoe.png', tipo: 'biped', w: 13, x: 74, y: 55, sonido: [587, 698, 880] },
-  { id: 'coti', nombre: 'Coti', archivo: 'char_coti.png', tipo: 'biped', w: 13, x: 34, y: 70, sonido: [698, 880, 1046] },
-  { id: 'puli', nombre: 'Puli', archivo: 'char_puli.png', tipo: 'biped', w: 13, x: 64, y: 68, sonido: [784, 988, 1174] },
-  { id: 'tito', nombre: 'Tito', archivo: 'char_tito.png', tipo: 'biped', w: 13, x: 14, y: 74, sonido: [523, 698, 880] },
-  { id: 'luta', nombre: 'Luta', archivo: 'char_luta.png', tipo: 'biped', w: 13, x: 84, y: 72, sonido: [440, 587, 740] },
-  { id: 'michi', nombre: 'Michi', archivo: 'char_michi.png', tipo: 'cuadrupedo', w: 9, x: 40, y: 82, sonido: [880, 988] },
-  { id: 'vago', nombre: 'Vago', archivo: 'char_vago.png', tipo: 'cuadrupedo', w: 10, x: 58, y: 84, sonido: [349, 440] },
-  { id: 'copo', nombre: 'Copo de Nieve', archivo: 'char_copo.png', tipo: 'cuadrupedo', w: 9, x: 26, y: 86, sonido: [659, 784] },
+  { id: 'toqwow', nombre: 'Toqwow', archivo: 'char_toqwow.png', tipo: 'biped', w: 12, x: 55, y: 54, sonido: [523, 659, 784] },
+  { id: 'tizi', nombre: 'Tizi', archivo: 'char_tizi.png', tipo: 'biped', w: 10, x: 42, y: 50, sonido: [659, 784, 988] },
+  { id: 'zoe', nombre: 'Zoe', archivo: 'char_zoe.png', tipo: 'biped', w: 10, x: 62, y: 48, sonido: [587, 698, 880] },
+  { id: 'coti', nombre: 'Coti', archivo: 'char_coti.png', tipo: 'biped', w: 10, x: 48, y: 58, sonido: [698, 880, 1046] },
+  { id: 'puli', nombre: 'Puli', archivo: 'char_puli.png', tipo: 'biped', w: 10, x: 58, y: 60, sonido: [784, 988, 1174] },
+  { id: 'tito', nombre: 'Tito', archivo: 'char_tito.png', tipo: 'biped', w: 10, x: 38, y: 60, sonido: [523, 698, 880] },
+  { id: 'luta', nombre: 'Luta', archivo: 'char_luta.png', tipo: 'biped', w: 10, x: 68, y: 56, sonido: [440, 587, 740] },
+  { id: 'michi', nombre: 'Michi', archivo: 'char_michi.png', tipo: 'cuadrupedo', w: 7, x: 45, y: 64, sonido: [880, 988] },
+  { id: 'vago', nombre: 'Vago', archivo: 'char_vago.png', tipo: 'cuadrupedo', w: 8, x: 63, y: 65, sonido: [349, 440] },
+  { id: 'copo', nombre: 'Copo de Nieve', archivo: 'char_copo.png', tipo: 'cuadrupedo', w: 7, x: 53, y: 66, sonido: [659, 784] },
 ];
 
 type Portal = { id: string; nombre: string; emoji: string; ruta: string; x: number; y: number; w: number };
 
-// Posiciones de los 5 portales sobre la plaza (ajustar % cuando se vea el fondo real)
+// Posiciones de los 5 portales, ubicadas sobre cada estructura real del fondo
 const PORTALES: Portal[] = [
-  { id: 'guarderia', nombre: 'Guardería Mágica', emoji: '🍼', ruta: '/mundo/0/guarderia', x: 15, y: 30, w: 13 },
-  { id: 'parque', nombre: 'Parque de los Descubrimientos', emoji: '🌷', ruta: '/mundo/0/parque', x: 38, y: 22, w: 13 },
-  { id: 'casa-juguetes', nombre: 'Casa de los Juguetes Vivos', emoji: '🧸', ruta: '/mundo/0/casa-juguetes', x: 62, y: 22, w: 13 },
-  { id: 'nave', nombre: 'Nave de Planeta Tiqui', emoji: '🚀', ruta: '/mundo/0/nave', x: 85, y: 30, w: 13 },
-  { id: 'taller', nombre: 'Taller de Vestuario', emoji: '👗', ruta: '/mundo/0/taller', x: 50, y: 16, w: 13 },
+  { id: 'guarderia', nombre: 'Guardería Mágica', emoji: '🍼', ruta: '/mundo/0/guarderia', x: 20, y: 20, w: 10 },
+  { id: 'casa-juguetes', nombre: 'Casa de los Juguetes Vivos', emoji: '🧸', ruta: '/mundo/0/casa-juguetes', x: 18, y: 76, w: 10 },
+  { id: 'taller', nombre: 'Taller de Vestuario', emoji: '👗', ruta: '/mundo/0/taller', x: 77, y: 45, w: 10 },
+  { id: 'parque', nombre: 'Parque de los Descubrimientos', emoji: '🌷', ruta: '/mundo/0/parque', x: 88, y: 20, w: 10 },
+  { id: 'nave', nombre: 'Nave de Planeta Tiqui', emoji: '🚀', ruta: '/mundo/0/nave', x: 88, y: 74, w: 10 },
 ];
 
 type Pos = { x: number; y: number };
