@@ -18,8 +18,7 @@ const BG = '/assets/redesign/aldea/fondo.webp';
 // Elenco 3D claymation, compartido por las 5 zonas nuevas del rediseño:
 const CHAR_BASE = '/assets/redesign/personajes';
 
-// NOTA: falta subir char_toqwow.png (los otros 9 personajes ya están) — hasta
-// entonces Toqwow no se va a ver en la plaza.
+
 
 type Personaje = {
   id: string; nombre: string; archivo: string; tipo: 'biped' | 'cuadrupedo';

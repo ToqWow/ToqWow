@@ -16,10 +16,11 @@ const BG = '/assets/redesign/taller/fondo.webp';
 const CHAR_BASE = '/assets/redesign/personajes';
 const ROPA_BASE = '/assets/redesign/taller';
 
-// ---- Elenco (falta char_toqwow.png del rediseño, se agrega cuando esté) ----
+// ---- Elenco completo (10 personajes) ----
 type Tipo = 'biped' | 'cuadrupedo';
 type Personaje = { id: string; nombre: string; archivo: string; tipo: Tipo };
 const PERSONAJES: Personaje[] = [
+  { id: 'toqwow', nombre: 'Toqwow', archivo: 'char_toqwow.png', tipo: 'biped' },
   { id: 'tizi', nombre: 'Tizi', archivo: 'char_tizi.png', tipo: 'biped' },
   { id: 'zoe', nombre: 'Zoe', archivo: 'char_zoe.png', tipo: 'biped' },
   { id: 'coti', nombre: 'Coti', archivo: 'char_coti.png', tipo: 'biped' },
@@ -93,7 +94,7 @@ type Arrastrando = { prenda: Prenda; x: number; y: number };
 
 export default function TallerPage() {
   const router = useRouter();
-  const [personajeId, setPersonajeId] = useState('tizi');
+  const [personajeId, setPersonajeId] = useState('toqwow');
   const [tab, setTab] = useState<Categoria>('accesorios');
   const [equipado, setEquipado] = useState<Record<string, Partial<Record<Zona, Prenda>>>>({});
   const [arrastrando, setArrastrando] = useState<Arrastrando | null>(null);
