@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
-// ---- Audio synth (mismo patrón liviano usado en Aldea/Guardería) ----
+// ---- Audio synth (mismo patrón liviano usado en el resto de zonas nuevas) ----
 let AC: AudioContext | null = null;
 const ac = (): AudioContext => { if (!AC) AC = new ((window as any).AudioContext || (window as any).webkitAudioContext)(); return AC!; };
 const note = (f: number, d = 0.3, v = 0.2, t: OscillatorType = 'sine') => {
@@ -15,12 +15,12 @@ const vib = (p: number | number[]) => { try { (navigator as any).vibrate?.(p); }
 const BG = '/assets/redesign/casa-juguetes/fondo.webp';
 const PROPS_BASE = '/assets/redesign/casa-juguetes/props';
 
-// "Juguetes vivos": cada juguete es libremente arrastrable por el cuarto y
-// reacciona (rebote + sonido + partícula) al tocarlo sin arrastrar, como si
-// despertara un segundo. Sin puzzle de colocación — es un sandbox de juego libre.
+// "Juguetes vivos": el objetivo del juego es guardar los 11 juguetes en el
+// baúl abierto. Arrastrar un juguete cerca del baúl lo guarda (con animación
+// + sonido) y suma al contador. Tocar un juguete sin arrastrarlo lo hace
+// "cobrar vida" un instante (rebote + sonido), sin contar para la meta.
 type Juguete = { id: string; nombre: string; archivo: string; w: number; x: number; y: number; sonido: number[]; emoji: string };
 
-// Posiciones iniciales dispersas por el piso/alfombra (provisorio, a ajustar mirando el fondo real)
 const JUGUETES: Juguete[] = [
   { id: 'oso', nombre: 'Oso de peluche', archivo: 'oso_peluche.png', w: 13, x: 45, y: 66, sonido: [392, 440, 523], emoji: '🧸' },
   { id: 'perrito', nombre: 'Perrito de peluche', archivo: 'peluche_perrito.png', w: 11, x: 61, y: 74, sonido: [440, 523, 587], emoji: '🐶' },
@@ -35,19 +35,25 @@ const JUGUETES: Juguete[] = [
   { id: 'pelota', nombre: 'Pelota', archivo: 'pelota.png', w: 6, x: 52, y: 79, sonido: [392, 523, 659], emoji: '⚽' },
 ];
 
+// Posición del baúl abierto en el fondo real (meta del juego)
+const BAUL = { x: 19, y: 63, radio: 16 };
+
 type Pos = { x: number; y: number };
 type Arrastrando = { id: string; startClientX: number; startClientY: number; offsetX: number; offsetY: number; movido: boolean };
 type Burst = { id: number; x: number; y: number; emoji: string };
 
+const posicionesIniciales = () => Object.fromEntries(JUGUETES.map(j => [j.id, { x: j.x, y: j.y }]));
+
 export default function CasaJuguetesPage() {
   const router = useRouter();
 
-  const [pos, setPos] = useState<Record<string, Pos>>(
-    Object.fromEntries(JUGUETES.map(j => [j.id, { x: j.x, y: j.y }]))
-  );
+  const [pos, setPos] = useState<Record<string, Pos>>(posicionesIniciales);
   const [zOrder, setZOrder] = useState<string[]>(JUGUETES.map(j => j.id));
+  const [guardados, setGuardados] = useState<Set<string>>(new Set());
+  const [guardandoId, setGuardandoId] = useState<string | null>(null);
   const [bounceId, setBounceId] = useState<string | null>(null);
   const [bursts, setBursts] = useState<Burst[]>([]);
+  const [celebrando, setCelebrando] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const burstIdRef = useRef(0);
   const arrastre = useRef<Arrastrando | null>(null);
@@ -63,6 +69,7 @@ export default function CasaJuguetesPage() {
   };
 
   const onJuguetePointerDown = (j: Juguete) => (e: React.PointerEvent) => {
+    if (guardados.has(j.id)) return;
     e.stopPropagation();
     traerAlFrente(j.id);
     const rect = containerRef.current?.getBoundingClientRect();
@@ -89,17 +96,51 @@ export default function CasaJuguetesPage() {
     setPos(prev => ({ ...prev, [a.id]: { x: Math.max(3, Math.min(97, xPct)), y: Math.max(8, Math.min(96, yPct)) } }));
   };
 
+  const reiniciarRonda = () => {
+    setPos(posicionesIniciales());
+    setGuardados(new Set());
+    setZOrder(JUGUETES.map(j => j.id));
+  };
+
   const onContainerPointerUp = () => {
     const a = arrastre.current;
     arrastre.current = null;
     if (!a) return;
+    const j = JUGUETES.find(x => x.id === a.id)!;
+
     if (!a.movido) {
-      const j = JUGUETES.find(x => x.id === a.id)!;
+      // toque simple -> reacción de vida, no cuenta para la meta
       setBounceId(j.id);
       setTimeout(() => setBounceId(null), 260);
       melody(j.sonido, 90, 0.22, 0.16);
       vib(15);
       lanzarBurst(pos[j.id].x, pos[j.id].y - j.w * 0.5, j.emoji);
+      return;
+    }
+
+    // soltado -> ¿cerca del baúl?
+    const p = pos[j.id];
+    const dist = Math.hypot(p.x - BAUL.x, p.y - BAUL.y);
+    if (dist < BAUL.radio) {
+      setGuardandoId(j.id);
+      melody([659, 880, 1046], 80, 0.2, 0.2);
+      vib(20);
+      lanzarBurst(BAUL.x, BAUL.y - 6, '✨');
+      setTimeout(() => {
+        setGuardados(prev => {
+          const next = new Set(prev).add(j.id);
+          if (next.size === JUGUETES.length) {
+            setTimeout(() => {
+              setCelebrando(true);
+              melody([523, 659, 784, 1046, 1318], 110, 0.35, 0.22);
+              vib([20, 15, 20, 15, 30]);
+              setTimeout(() => { setCelebrando(false); reiniciarRonda(); }, 2600);
+            }, 300);
+          }
+          return next;
+        });
+        setGuardandoId(null);
+      }, 260);
     }
   };
 
@@ -107,11 +148,15 @@ export default function CasaJuguetesPage() {
     <div style={{ width: '100vw', height: '100dvh', overflow: 'hidden', background: '#2a1f1a', position: 'relative', touchAction: 'none' }}>
       <button
         onClick={() => router.push('/mundo/0/aldea')}
-        style={{ position: 'absolute', top: 10, left: 10, zIndex: 50, width: 38, height: 38, borderRadius: '50%', background: 'rgba(20,10,40,.75)', color: 'white', border: 'none', fontSize: 18 }}
+        style={{ position: 'absolute', top: 10, left: 10, zIndex: 80, width: 38, height: 38, borderRadius: '50%', background: 'rgba(20,10,40,.75)', color: 'white', border: 'none', fontSize: 18 }}
       >←</button>
 
-      <div style={{ position: 'absolute', top: 10, left: 58, zIndex: 50, background: 'rgba(20,10,40,.75)', borderRadius: 20, padding: '5px 12px', color: 'white', fontWeight: 700, fontSize: 13, border: '2px solid rgba(255,255,255,.4)' }}>
+      <div style={{ position: 'absolute', top: 10, left: 58, zIndex: 80, background: 'rgba(20,10,40,.75)', borderRadius: 20, padding: '5px 12px', color: 'white', fontWeight: 700, fontSize: 13, border: '2px solid rgba(255,255,255,.4)' }}>
         🧸 La Casa de los Juguetes Vivos
+      </div>
+
+      <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 80, background: 'rgba(20,10,40,.75)', borderRadius: 20, padding: '5px 14px', color: 'white', fontWeight: 700, fontSize: 13, border: '2px solid rgba(255,255,255,.4)' }}>
+        🧺 {guardados.size}/{JUGUETES.length}
       </div>
 
       <div style={{ position: 'absolute', inset: 0 }}>
@@ -124,16 +169,28 @@ export default function CasaJuguetesPage() {
         >
           <Image src={BG} alt="La Casa de los Juguetes Vivos" fill priority style={{ objectFit: 'cover', objectPosition: 'center' }} />
 
-          {zOrder.map((id, i) => {
+          {/* Brillo suave sobre el baúl para indicar la meta */}
+          <div style={{
+            position: 'absolute', left: `${BAUL.x}%`, top: `${BAUL.y}%`, width: '22%', aspectRatio: '1',
+            transform: 'translate(-50%,-50%)', borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(255,220,140,.28), rgba(255,220,140,0))',
+            animation: 'pulseBaul 2.4s ease-in-out infinite', zIndex: 5, pointerEvents: 'none',
+          }} />
+
+          {zOrder.filter(id => !guardados.has(id)).map((id, i) => {
             const j = JUGUETES.find(x => x.id === id)!;
             const cur = pos[id];
+            const guardando = guardandoId === id;
             return (
               <img key={j.id} src={`${PROPS_BASE}/${j.archivo}`} alt={j.nombre} draggable={false}
                 onPointerDown={onJuguetePointerDown(j)}
                 style={{
-                  position: 'absolute', left: `${cur.x}%`, top: `${cur.y}%`, width: `${j.w}%`,
-                  transform: `translate(-50%,-50%) scale(${bounceId === j.id ? 1.15 : 1})`,
-                  transition: arrastre.current?.id === j.id ? 'none' : 'transform .2s cubic-bezier(.34,1.56,.64,1), left .18s ease-out, top .18s ease-out',
+                  position: 'absolute',
+                  left: `${guardando ? BAUL.x : cur.x}%`, top: `${guardando ? BAUL.y : cur.y}%`,
+                  width: `${j.w}%`,
+                  transform: `translate(-50%,-50%) scale(${guardando ? 0.15 : bounceId === j.id ? 1.15 : 1})`,
+                  opacity: guardando ? 0 : 1,
+                  transition: guardando ? 'all .26s ease-in' : (arrastre.current?.id === j.id ? 'none' : 'transform .2s cubic-bezier(.34,1.56,.64,1), left .18s ease-out, top .18s ease-out'),
                   cursor: 'grab', zIndex: 20 + i, touchAction: 'none',
                   filter: 'drop-shadow(0 6px 8px rgba(0,0,0,.4))',
                 }} />
@@ -146,11 +203,28 @@ export default function CasaJuguetesPage() {
               animation: 'burstFloatCasa .9s ease-out forwards', zIndex: 60, pointerEvents: 'none',
             }}>{b.emoji}</div>
           ))}
+
+          {celebrando && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(20,10,40,.35)',
+            }}>
+              <div style={{
+                background: 'rgba(255,255,255,.95)', borderRadius: 24, padding: '20px 32px', textAlign: 'center',
+                animation: 'popCeleb .4s cubic-bezier(.34,1.56,.64,1)',
+              }}>
+                <div style={{ fontSize: 40 }}>🎉🧸🎉</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#5a3a1a', marginTop: 6 }}>¡Todo ordenado!</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <style jsx global>{`
         @keyframes burstFloatCasa { 0%{ transform: translate(-50%,-50%) scale(.4); opacity: 1; } 40%{ transform: translate(-50%,-150%) scale(1.3); opacity: 1;} 100%{ transform: translate(-50%,-220%) scale(1); opacity: 0; } }
+        @keyframes pulseBaul { 0%,100%{ opacity: .5; transform: translate(-50%,-50%) scale(1); } 50%{ opacity: 1; transform: translate(-50%,-50%) scale(1.08); } }
+        @keyframes popCeleb { 0%{ transform: scale(.5); opacity: 0; } 100%{ transform: scale(1); opacity: 1; } }
       `}</style>
     </div>
   );
