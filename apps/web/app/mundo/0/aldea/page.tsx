@@ -25,19 +25,19 @@ type Personaje = {
   w: number; x: number; y: number; sonido: number[];
 };
 
-// Posiciones iniciales dispersas por la plaza central de piedra (ajustadas mirando
-// el fondo real: la plaza vacía queda aprox entre 40-70% x / 45-62% y)
+// Posiciones iniciales dispersas por la plaza y el camino (ajustadas mirando
+// el fondo real; tamaños grandes para que se vean bien como protagonistas)
 const PERSONAJES: Personaje[] = [
-  { id: 'toqwow', nombre: 'Toqwow', archivo: 'char_toqwow.png', tipo: 'biped', w: 12, x: 55, y: 54, sonido: [523, 659, 784] },
-  { id: 'tizi', nombre: 'Tizi', archivo: 'char_tizi.png', tipo: 'biped', w: 10, x: 42, y: 50, sonido: [659, 784, 988] },
-  { id: 'zoe', nombre: 'Zoe', archivo: 'char_zoe.png', tipo: 'biped', w: 10, x: 62, y: 48, sonido: [587, 698, 880] },
-  { id: 'coti', nombre: 'Coti', archivo: 'char_coti.png', tipo: 'biped', w: 10, x: 48, y: 58, sonido: [698, 880, 1046] },
-  { id: 'puli', nombre: 'Puli', archivo: 'char_puli.png', tipo: 'biped', w: 10, x: 58, y: 60, sonido: [784, 988, 1174] },
-  { id: 'tito', nombre: 'Tito', archivo: 'char_tito.png', tipo: 'biped', w: 10, x: 38, y: 60, sonido: [523, 698, 880] },
-  { id: 'luta', nombre: 'Luta', archivo: 'char_luta.png', tipo: 'biped', w: 10, x: 68, y: 56, sonido: [440, 587, 740] },
-  { id: 'michi', nombre: 'Michi', archivo: 'char_michi.png', tipo: 'cuadrupedo', w: 7, x: 45, y: 64, sonido: [880, 988] },
-  { id: 'vago', nombre: 'Vago', archivo: 'char_vago.png', tipo: 'cuadrupedo', w: 8, x: 63, y: 65, sonido: [349, 440] },
-  { id: 'copo', nombre: 'Copo de Nieve', archivo: 'char_copo.png', tipo: 'cuadrupedo', w: 7, x: 53, y: 66, sonido: [659, 784] },
+  { id: 'toqwow', nombre: 'Toqwow', archivo: 'char_toqwow.png', tipo: 'biped', w: 20, x: 55, y: 56, sonido: [523, 659, 784] },
+  { id: 'tizi', nombre: 'Tizi', archivo: 'char_tizi.png', tipo: 'biped', w: 17, x: 35, y: 48, sonido: [659, 784, 988] },
+  { id: 'zoe', nombre: 'Zoe', archivo: 'char_zoe.png', tipo: 'biped', w: 17, x: 68, y: 46, sonido: [587, 698, 880] },
+  { id: 'coti', nombre: 'Coti', archivo: 'char_coti.png', tipo: 'biped', w: 17, x: 44, y: 62, sonido: [698, 880, 1046] },
+  { id: 'puli', nombre: 'Puli', archivo: 'char_puli.png', tipo: 'biped', w: 17, x: 62, y: 64, sonido: [784, 988, 1174] },
+  { id: 'tito', nombre: 'Tito', archivo: 'char_tito.png', tipo: 'biped', w: 17, x: 28, y: 62, sonido: [523, 698, 880] },
+  { id: 'luta', nombre: 'Luta', archivo: 'char_luta.png', tipo: 'biped', w: 17, x: 76, y: 60, sonido: [440, 587, 740] },
+  { id: 'michi', nombre: 'Michi', archivo: 'char_michi.png', tipo: 'cuadrupedo', w: 13, x: 40, y: 72, sonido: [880, 988] },
+  { id: 'vago', nombre: 'Vago', archivo: 'char_vago.png', tipo: 'cuadrupedo', w: 14, x: 66, y: 74, sonido: [349, 440] },
+  { id: 'copo', nombre: 'Copo de Nieve', archivo: 'char_copo.png', tipo: 'cuadrupedo', w: 13, x: 53, y: 76, sonido: [659, 784] },
 ];
 
 type Portal = { id: string; nombre: string; emoji: string; ruta: string; x: number; y: number; w: number };

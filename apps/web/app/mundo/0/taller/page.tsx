@@ -210,7 +210,7 @@ export default function TallerPage() {
 
         {/* Personaje + prendas equipadas */}
         <div ref={charRef} style={{
-          position: 'absolute', left: '50%', top: '60%', width: '24%',
+          position: 'absolute', left: '50%', top: '62%', width: '36%',
           transform: `translate(-50%,-50%) scale(${bounce ? 1.08 : 1})`,
           transition: 'transform .22s cubic-bezier(.34,1.56,.64,1)', zIndex: 30,
         }}>
